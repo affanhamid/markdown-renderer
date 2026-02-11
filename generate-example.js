@@ -107,6 +107,15 @@ x <- 42
 print(x)
 \`\`\`
 
+### Executable Python Code Block (Error Demo)
+
+\`\`\`python
+# This will produce an error!
+import pandas as pd
+df = pd.read_csv("nonexistent_file.csv")
+print(df.head())
+\`\`\`
+
 ## Math
 
 ### Inline Math
@@ -430,20 +439,26 @@ const fullHtml = `<!DOCTYPE html>
           // Simulate async execution with setTimeout
           await new Promise(resolve => setTimeout(resolve, 800));
 
-          // Mock output based on language
-          let mockOutput;
-          if (language === 'python') {
-            mockOutput = 'Hello, World!\\n42\\n[1, 2, 3]';
-          } else if (language === 'r') {
-            mockOutput = '[1] "Hello from R!"\\n[1] 42';
+          // Mock output based on language and code content
+          const isError = code.includes('nonexistent_file');
+          if (isError) {
+            outputElement.textContent = 'Traceback (most recent call last):\\n  File "<stdin>", line 2, in <module>\\nFileNotFoundError: [Errno 2] No such file or directory: \\'nonexistent_file.csv\\'';
+            outputElement.style.background = '#fef2f2';
+            outputElement.style.color = '#dc2626';
+            outputElement.className = 'md-code-output md-code-error';
           } else {
-            mockOutput = 'Execution completed.';
+            let mockOutput;
+            if (language === 'python') {
+              mockOutput = 'Hello, World!\\n42\\n[1, 2, 3]';
+            } else if (language === 'r') {
+              mockOutput = '[1] "Hello from R!"\\n[1] 42';
+            } else {
+              mockOutput = 'Execution completed.';
+            }
+            outputElement.textContent = mockOutput;
+            outputElement.style.background = '#f7f7f7';
+            outputElement.style.color = '#333';
           }
-
-          // Display the output
-          outputElement.textContent = mockOutput;
-          outputElement.style.background = '#f7f7f7';
-          outputElement.style.color = '#333';
 
           // Re-enable button
           runBtn.disabled = false;
