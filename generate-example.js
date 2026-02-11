@@ -226,20 +226,20 @@ Text after the rule.
 
 ### Block Image
 
-![Example Image](/images/example.png)
+![Example Image](https://picsum.photos/seed/example/800/400)
 
 ### Inline Image
 
-Here is an image ![photo](/images/photo.png) in a sentence.
+Here is an image ![photo](https://picsum.photos/seed/photo/200/100) in a sentence.
 
 ### Multiple Images
 
-![First](/images/first.png)
-![Second](/images/second.png)
+![First](https://picsum.photos/seed/first/800/300)
+![Second](https://picsum.photos/seed/second/800/300)
 
 ### Image with Empty Alt
 
-![](/images/placeholder.png)
+![](https://picsum.photos/seed/placeholder/800/200)
 
 ## Complex Mixed Scenario
 
@@ -294,7 +294,7 @@ This section combines **everything**:
 
 Here's a formula: $$\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$
 
-And an image: ![example](/images/final.png)
+And an image: ![example](https://picsum.photos/seed/final/600/200)
 
 ---
 
@@ -317,8 +317,8 @@ const fullHtml = `<!DOCTYPE html>
   <!-- KaTeX CSS for math rendering -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css">
 
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tailwind CSS with typography plugin -->
+  <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
 
   <style>
     body {
@@ -362,11 +362,20 @@ const fullHtml = `<!DOCTYPE html>
       border: none;
       border-top: 1px solid #e5e7eb;
     }
+    .prose pre {
+      color: #1f2937;
+      background: #f3f4f6;
+    }
+    .prose code {
+      color: #1f2937;
+    }
   </style>
 </head>
 <body>
   <div class="container">
-    ${renderedContent}
+    <div class="prose prose-stone prose-lg mx-auto max-w-none">
+      ${renderedContent}
+    </div>
   </div>
 
   <script>
