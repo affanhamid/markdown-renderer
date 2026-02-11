@@ -369,6 +369,10 @@ const fullHtml = `<!DOCTYPE html>
     .prose code {
       color: #1f2937;
     }
+    .prose code::before,
+    .prose code::after {
+      content: none;
+    }
   </style>
 </head>
 <body>
