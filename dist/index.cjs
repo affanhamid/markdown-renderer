@@ -27,7 +27,7 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
 ));
 var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
-// ../libraries/markdown-renderer/src/index.ts
+// src/index.ts
 var index_exports = {};
 __export(index_exports, {
   MarkdownRenderer: () => markdown_renderer_default,
@@ -35,10 +35,10 @@ __export(index_exports, {
 });
 module.exports = __toCommonJS(index_exports);
 
-// ../libraries/markdown-renderer/src/markdown-renderer.tsx
-var import_react = __toESM(require("react"));
+// src/markdown-renderer.tsx
+var import_react = __toESM(require("react"), 1);
 var import_katex_min = require("katex/dist/katex.min.css");
-var import_katex = __toESM(require("katex"));
+var import_katex = __toESM(require("katex"), 1);
 var import_jsx_runtime = require("react/jsx-runtime");
 function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
@@ -107,7 +107,16 @@ function hasMatchingDelimiter(text, startIndex, delimiter) {
   }
   return false;
 }
+var IMG_PLACEHOLDER = "IMG";
 var format = (text) => {
+  const images = [];
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    const idx = images.length;
+    images.push(
+      `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" class="inline max-w-full rounded" />`
+    );
+    return `${IMG_PLACEHOLDER}${idx}`;
+  });
   let inLatex = false;
   let inBoldItalics = false;
   let inBold = false;
@@ -388,7 +397,14 @@ var format = (text) => {
   if (currText) {
     parts.unshift(escapeHtml(currText));
   }
-  return parts.join("");
+  let result = parts.join("");
+  for (let idx = 0; idx < images.length; idx++) {
+    result = result.replace(
+      escapeHtml(`${IMG_PLACEHOLDER}${idx}`),
+      images[idx]
+    );
+  }
+  return result;
 };
 var getIndentLevel = (line) => {
   let indent = 0;
@@ -625,6 +641,14 @@ function renderMarkdownToHtml(markdown) {
       continue;
     } else if (trimmed === "---") {
       parts.push("<hr />");
+      i++;
+      continue;
+    }
+    const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+    if (imageMatch && imageMatch[2]) {
+      const alt = escapeHtml(imageMatch[1] ?? "");
+      const src = escapeHtml(imageMatch[2]);
+      parts.push(`<img src="${src}" alt="${alt}" class="max-w-full rounded my-1" />`);
       i++;
       continue;
     }
