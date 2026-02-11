@@ -1,43 +1,30 @@
+// src/markdown-renderer.tsx
 import React from "react";
 import "katex/dist/katex.min.css";
 import katex from "katex";
-
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
+import { jsx } from "react/jsx-runtime";
+function escapeHtml(text) {
+  return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
-
-// Preprocess LaTeX content to escape & inside \text{} blocks
-// In LaTeX, & is a special character for alignment, so it needs to be escaped as \&
-function preprocessLatex(latex: string): string {
-  // Escape unescaped & inside \text{...} blocks
+function preprocessLatex(latex) {
   return latex.replace(/\\text\{([^}]*)\}/g, (match, content) => {
-    // Replace unescaped & with \&
     const escapedContent = content.replace(/(?<!\\)&/g, "\\&");
     return `\\text{${escapedContent}}`;
   });
 }
-
-function getColorClass(colorName: string): string {
-  const colorMap: Record<string, string> = {
+function getColorClass(colorName) {
+  const colorMap = {
     important: "text-red-700",
     definition: "text-sky-700",
     example: "text-green-700",
     note: "text-amber-700",
-    formula: "text-violet-600",
+    formula: "text-violet-600"
   };
   return colorMap[colorName.toLowerCase()] || "";
 }
-
-// Helper to check if a delimiter has a matching pair
-function hasMatchingDelimiter(text: string, startIndex: number, delimiter: string): boolean {
+function hasMatchingDelimiter(text, startIndex, delimiter) {
   let i = startIndex - 1;
   let depth = 0;
-
   while (i >= 0) {
     if (delimiter === "*" && text[i] === "*") {
       const nextChar = i + 1 < text.length ? text[i + 1] : null;
@@ -81,23 +68,18 @@ function hasMatchingDelimiter(text: string, startIndex: number, delimiter: strin
     }
     i--;
   }
-
   return false;
 }
-
-const IMG_PLACEHOLDER = "\x01IMG";
-
-const format = (text: string): string => {
-  // Pre-process inline images: ![alt](url) → placeholder
-  const images: string[] = [];
-  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, url: string) => {
+var IMG_PLACEHOLDER = "IMG";
+var format = (text) => {
+  const images = [];
+  text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
     const idx = images.length;
     images.push(
-      `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" class="inline max-w-full rounded" />`,
+      `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" class="inline max-w-full rounded" />`
     );
-    return `${IMG_PLACEHOLDER}${idx}\x01`;
+    return `${IMG_PLACEHOLDER}${idx}`;
   });
-
   let inLatex = false;
   let inBoldItalics = false;
   let inBold = false;
@@ -105,11 +87,9 @@ const format = (text: string): string => {
   let inCode = false;
   let i = text.length - 1;
   let currText = "";
-  const parts: string[] = [];
-  let needsLeftRight: { open: string; close: string } | null = null;
-
+  const parts = [];
+  let needsLeftRight = null;
   while (i >= 0) {
-    // Handle inline code - takes precedence over all other formatting
     if (inCode) {
       if (text[i] === "`") {
         parts.unshift(`<code>${escapeHtml(currText)}</code>`);
@@ -122,15 +102,11 @@ const format = (text: string): string => {
       i--;
       continue;
     }
-
-    // Check if this is an escaped backtick
     if (text[i] === "`" && i > 0 && text[i - 1] === "\\") {
       currText = "`" + currText;
       i -= 2;
       continue;
     }
-
-    // Check for code delimiter
     if (text[i] === "`" && !inLatex && !inBoldItalics && !inBold && !inItalic) {
       if (hasMatchingDelimiter(text, i, "`")) {
         if (currText) {
@@ -142,8 +118,6 @@ const format = (text: string): string => {
         continue;
       }
     }
-
-    // Check if this is an escaped $
     if (text[i] === "$" && i > 0 && text[i - 1] === "\\") {
       if (inLatex) {
         currText = "\\$" + currText;
@@ -153,26 +127,23 @@ const format = (text: string): string => {
       i -= 2;
       continue;
     }
-
     if (inLatex) {
       if (text[i] === "$") {
         const nextChar = i + 1 < text.length ? text[i + 1] : null;
         const prevChar = i > 0 ? text[i - 1] : null;
         if (nextChar !== "$" && prevChar !== "$" && prevChar !== "\\") {
           let mathContent = currText;
-
           if (needsLeftRight) {
-            const leftMap: Record<string, string> = {
+            const leftMap = {
               "(": "\\left(",
               "[": "\\left[",
-              "{": "\\left\\{",
+              "{": "\\left\\{"
             };
-            const rightMap: Record<string, string> = {
+            const rightMap = {
               ")": "\\right)",
               "]": "\\right]",
-              "}": "\\right\\}",
+              "}": "\\right\\}"
             };
-
             if (prevChar && prevChar === needsLeftRight.open) {
               mathContent = leftMap[prevChar] + mathContent + rightMap[needsLeftRight.close];
               i--;
@@ -183,11 +154,10 @@ const format = (text: string): string => {
           } else {
             needsLeftRight = null;
           }
-
           try {
             const mathHtml = katex.renderToString(preprocessLatex(mathContent), {
               displayMode: false,
-              throwOnError: false,
+              throwOnError: false
             });
             parts.unshift(mathHtml);
             currText = "";
@@ -246,11 +216,10 @@ const format = (text: string): string => {
       i--;
     } else {
       const prevCharInOriginal = i > 0 ? text[i - 1] : null;
-      if (text[i] && [")", "]", "}"].includes(text[i]!) && prevCharInOriginal === "$") {
+      if (text[i] && [")", "]", "}"].includes(text[i]) && prevCharInOriginal === "$") {
         i--;
         continue;
       }
-      // Check for {/color} closing tag
       if (text[i] === "}" && i >= 7 && text.slice(i - 7, i + 1) === "{/color}") {
         if (currText) {
           parts.unshift(escapeHtml(currText));
@@ -260,7 +229,6 @@ const format = (text: string): string => {
         i -= 8;
         continue;
       }
-      // Check for {color:NAME} opening tag
       if (text[i] === "}" && i >= 8) {
         const searchStart = Math.max(0, i - 30);
         const segment = text.slice(searchStart, i + 1);
@@ -278,7 +246,6 @@ const format = (text: string): string => {
           }
         }
       }
-      // Check for *** (bold+italics)
       if (i >= 2 && text.slice(i - 2, i + 1) === "***") {
         if (hasMatchingDelimiter(text, i - 2, "***")) {
           if (currText) {
@@ -290,7 +257,6 @@ const format = (text: string): string => {
           continue;
         }
       }
-      // Check for ** (bold)
       if (i >= 1 && text.slice(i - 1, i + 1) === "**") {
         if (hasMatchingDelimiter(text, i - 1, "**")) {
           if (currText) {
@@ -302,7 +268,6 @@ const format = (text: string): string => {
           continue;
         }
       }
-      // Check for * (italic)
       if (text[i] === "*") {
         const nextChar = i + 1 < text.length ? text[i + 1] : null;
         const prevChar = i > 0 ? text[i - 1] : null;
@@ -318,7 +283,6 @@ const format = (text: string): string => {
           }
         }
       }
-      // Check for $ (latex)
       if (text[i] === "$") {
         const nextChar = i + 1 < text.length ? text[i + 1] : null;
         const prevChar = i > 0 ? text[i - 1] : null;
@@ -328,68 +292,61 @@ const format = (text: string): string => {
             i--;
             continue;
           }
-          if (
-            !nextChar ||
-            [
-              " ",
-              "\t",
-              ".",
-              ",",
-              ")",
-              "]",
-              "}",
-              ";",
-              ":",
-              "!",
-              "?",
-              "-",
-              '"',
-              "'",
-              "%",
-              "\u2014",
-              "\uFF08",
-              "\uFF09",
-              "\uFF0C",
-              "\u3002",
-              "\uFF1A",
-              "\uFF1B",
-              "\uFF01",
-              "\uFF1F",
-              "\u3001",
-              "\u300B",
-              "\u300A",
-              "\u201C",
-              "\u201D",
-              "\u2018",
-              "\u2019",
-              "\u3010",
-              "\u3011",
-              "\u0964",
-              "\u0965",
-            ].includes(nextChar) ||
-            /[a-zA-Z]/.test(nextChar) ||
-            /[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u3040-\u309f\u30a0-\u30ff]/.test(nextChar)
-          ) {
+          if (!nextChar || [
+            " ",
+            "	",
+            ".",
+            ",",
+            ")",
+            "]",
+            "}",
+            ";",
+            ":",
+            "!",
+            "?",
+            "-",
+            '"',
+            "'",
+            "%",
+            "\u2014",
+            "\uFF08",
+            "\uFF09",
+            "\uFF0C",
+            "\u3002",
+            "\uFF1A",
+            "\uFF1B",
+            "\uFF01",
+            "\uFF1F",
+            "\u3001",
+            "\u300B",
+            "\u300A",
+            "\u201C",
+            "\u201D",
+            "\u2018",
+            "\u2019",
+            "\u3010",
+            "\u3011",
+            "\u0964",
+            "\u0965"
+          ].includes(nextChar) || /[a-zA-Z]/.test(nextChar) || /[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u3040-\u309f\u30a0-\u30ff]/.test(nextChar)) {
             if (currText) {
               parts.unshift(escapeHtml(currText));
               currText = "";
             }
-
             if (nextChar && [")", "]", "}"].includes(nextChar)) {
-              const bracketMap: Record<string, string> = {
+              const bracketMap = {
                 ")": "(",
                 "]": "[",
-                "}": "{",
+                "}": "{"
               };
               const openBracket = bracketMap[nextChar];
               if (openBracket) {
                 needsLeftRight = {
                   open: openBracket,
-                  close: nextChar,
+                  close: nextChar
                 };
               }
             }
-
             inLatex = true;
             i--;
             continue;
@@ -400,103 +357,71 @@ const format = (text: string): string => {
       i--;
     }
   }
-
   if (currText) {
     parts.unshift(escapeHtml(currText));
   }
-
-  // Post-process: restore image placeholders
   let result = parts.join("");
   for (let idx = 0; idx < images.length; idx++) {
     result = result.replace(
-      escapeHtml(`${IMG_PLACEHOLDER}${idx}\x01`),
-      images[idx]!,
+      escapeHtml(`${IMG_PLACEHOLDER}${idx}`),
+      images[idx]
     );
   }
   return result;
 };
-
-const getIndentLevel = (line: string): number => {
+var getIndentLevel = (line) => {
   let indent = 0;
   for (let i = 0; i < line.length; i++) {
     if (line[i] === " ") indent++;
-    else if (line[i] === "\t") indent += 4;
+    else if (line[i] === "	") indent += 4;
     else break;
   }
   return indent;
 };
-
-const parseListItems = (
-  lines: string[],
-  startIndex: number,
-  baseIndent: number,
-  listType: "ul" | "ol",
-  depth: number = 0,
-): { html: string; nextIndex: number } => {
-  const items: string[] = [];
+var parseListItems = (lines, startIndex, baseIndent, listType, depth = 0) => {
+  const items = [];
   let i = startIndex;
-
   while (i < lines.length) {
     const line = lines[i];
     if (!line) {
       i++;
       continue;
     }
-
     const indent = getIndentLevel(line);
     const trimmed = line.trim();
-
     if (indent < baseIndent) {
       break;
     }
-
     if (indent === baseIndent) {
       if (listType === "ul" && (trimmed.startsWith("* ") || trimmed.startsWith("- "))) {
         const content = format(trimmed.slice(2));
         let itemContent = `<li>${content}`;
-
         i++;
-        const continuationLines: string[] = [];
-
+        const continuationLines = [];
         while (i < lines.length) {
           const nextLine = lines[i];
           if (!nextLine) {
             i++;
             continue;
           }
-
           const nextIndent = getIndentLevel(nextLine);
           const nextTrimmed = nextLine.trim();
-
-          if (
-            nextIndent === baseIndent &&
-            (nextTrimmed.startsWith("* ") || nextTrimmed.startsWith("- "))
-          ) {
+          if (nextIndent === baseIndent && (nextTrimmed.startsWith("* ") || nextTrimmed.startsWith("- "))) {
             break;
           }
-
           if (nextIndent <= baseIndent) {
             break;
           }
-
-          if (
-            nextIndent > baseIndent &&
-            (nextTrimmed.startsWith("* ") ||
-              nextTrimmed.startsWith("- ") ||
-              nextTrimmed.match(/^\d+\. /))
-          ) {
-            const nestedType =
-              nextTrimmed.startsWith("* ") || nextTrimmed.startsWith("- ") ? "ul" : "ol";
+          if (nextIndent > baseIndent && (nextTrimmed.startsWith("* ") || nextTrimmed.startsWith("- ") || nextTrimmed.match(/^\d+\. /))) {
+            const nestedType = nextTrimmed.startsWith("* ") || nextTrimmed.startsWith("- ") ? "ul" : "ol";
             const nested = parseListItems(lines, i, nextIndent, nestedType, depth + 1);
             itemContent += nested.html;
             i = nested.nextIndex;
             continue;
           }
-
           continuationLines.push(nextLine);
           i++;
         }
-
         if (continuationLines.length > 0) {
           const continuationHtml = renderMarkdownToHtml(continuationLines.join("\n"));
           const match = continuationHtml.match(/<div class="prose[^"]*">(.*)<\/div>/s);
@@ -504,7 +429,6 @@ const parseListItems = (
             itemContent += match[1];
           }
         }
-
         itemContent += "</li>";
         items.push(itemContent);
       } else if (listType === "ol" && trimmed.match(/^\d+\. /)) {
@@ -512,54 +436,39 @@ const parseListItems = (
         if (match && match[2]) {
           const content = format(match[2]);
           let itemContent = `<li>${content}`;
-
           i++;
-          const continuationLines: string[] = [];
-
+          const continuationLines = [];
           while (i < lines.length) {
             const nextLine = lines[i];
             if (!nextLine) {
               i++;
               continue;
             }
-
             const nextIndent = getIndentLevel(nextLine);
             const nextTrimmed = nextLine.trim();
-
             if (nextIndent === baseIndent && nextTrimmed.match(/^\d+\. /)) {
               break;
             }
-
             if (nextIndent <= baseIndent) {
               break;
             }
-
-            if (
-              nextIndent > baseIndent &&
-              (nextTrimmed.startsWith("* ") ||
-                nextTrimmed.startsWith("- ") ||
-                nextTrimmed.match(/^\d+\. /))
-            ) {
-              const nestedType =
-                nextTrimmed.startsWith("* ") || nextTrimmed.startsWith("- ") ? "ul" : "ol";
+            if (nextIndent > baseIndent && (nextTrimmed.startsWith("* ") || nextTrimmed.startsWith("- ") || nextTrimmed.match(/^\d+\. /))) {
+              const nestedType = nextTrimmed.startsWith("* ") || nextTrimmed.startsWith("- ") ? "ul" : "ol";
               const nested = parseListItems(lines, i, nextIndent, nestedType, depth + 1);
               itemContent += nested.html;
               i = nested.nextIndex;
               continue;
             }
-
             continuationLines.push(nextLine);
             i++;
           }
-
           if (continuationLines.length > 0) {
             const continuationHtml = renderMarkdownToHtml(continuationLines.join("\n"));
-            const match = continuationHtml.match(/<div class="prose[^"]*">(.*)<\/div>/s);
-            if (match && match[1]) {
-              itemContent += match[1];
+            const match2 = continuationHtml.match(/<div class="prose[^"]*">(.*)<\/div>/s);
+            if (match2 && match2[1]) {
+              itemContent += match2[1];
             }
           }
-
           itemContent += "</li>";
           items.push(itemContent);
         } else {
@@ -572,9 +481,7 @@ const parseListItems = (
       i++;
     }
   }
-
   const tag = listType === "ul" ? "ul" : "ol";
-
   let styleClass = "ml-5 marker:text-current marker:font-bold ";
   if (listType === "ol") {
     if (depth === 0) styleClass += "list-decimal";
@@ -582,21 +489,18 @@ const parseListItems = (
     else styleClass += "list-[lower-roman]";
   } else {
     if (depth === 0) styleClass += "list-disc";
-    else if (depth === 1) styleClass += "list-['›_']";
+    else if (depth === 1) styleClass += "list-['\u203A_']";
     else styleClass += "list-[square]";
   }
-
   return {
     html: `<${tag} class="${styleClass}">${items.join("")}</${tag}>`,
-    nextIndex: i,
+    nextIndex: i
   };
 };
-
-function renderMarkdownToHtml(markdown: string): string {
+function renderMarkdownToHtml(markdown) {
   const lines = markdown.split("\n");
-  const parts: string[] = [];
+  const parts = [];
   let i = 0;
-
   while (i < lines.length) {
     const line = lines[i];
     if (!line) {
@@ -604,30 +508,29 @@ function renderMarkdownToHtml(markdown: string): string {
       continue;
     }
     const trimmed = line.trim();
-
     if (trimmed.startsWith("# ")) {
-      const content = format(trimmed.slice(2));
-      parts.push(`<h1 class="text-xl">${content}</h1>`);
+      const content2 = format(trimmed.slice(2));
+      parts.push(`<h1 class="text-xl">${content2}</h1>`);
       i++;
       continue;
     } else if (trimmed.startsWith("## ")) {
-      const content = format(trimmed.slice(3));
-      parts.push(`<h2 class="text-lg">${content}</h2>`);
+      const content2 = format(trimmed.slice(3));
+      parts.push(`<h2 class="text-lg">${content2}</h2>`);
       i++;
       continue;
     } else if (trimmed.startsWith("### ")) {
-      const content = format(trimmed.slice(4));
-      parts.push(`<h3 class="text-base">${content}</h3>`);
+      const content2 = format(trimmed.slice(4));
+      parts.push(`<h3 class="text-base">${content2}</h3>`);
       i++;
       continue;
     } else if (trimmed.startsWith("#### ")) {
-      const content = format(trimmed.slice(5));
-      parts.push(`<h4>${content}</h4>`);
+      const content2 = format(trimmed.slice(5));
+      parts.push(`<h4>${content2}</h4>`);
       i++;
       continue;
     } else if (trimmed.startsWith("##### ")) {
-      const content = format(trimmed.slice(6));
-      parts.push(`<h5>${content}</h5>`);
+      const content2 = format(trimmed.slice(6));
+      parts.push(`<h5>${content2}</h5>`);
       i++;
       continue;
     } else if (trimmed.startsWith("* ") || trimmed.startsWith("- ")) {
@@ -647,7 +550,7 @@ function renderMarkdownToHtml(markdown: string): string {
       try {
         const mathHtml = katex.renderToString(preprocessLatex(mathContent), {
           displayMode: true,
-          throwOnError: false,
+          throwOnError: false
         });
         parts.push(`<div>${mathHtml}</div>`);
       } catch {
@@ -656,19 +559,17 @@ function renderMarkdownToHtml(markdown: string): string {
       i++;
       continue;
     } else if (trimmed === "$$") {
-      const mathLines: string[] = [];
+      const mathLines = [];
       i++;
-
       while (i < lines.length) {
         const mathLine = lines[i];
         const mathTrimmed = mathLine?.trim() || "";
-
         if (mathTrimmed === "$$") {
           const mathContent = mathLines.join("\n");
           try {
             const mathHtml = katex.renderToString(preprocessLatex(mathContent), {
               displayMode: true,
-              throwOnError: false,
+              throwOnError: false
             });
             parts.push(`<div>${mathHtml}</div>`);
           } catch {
@@ -677,32 +578,26 @@ function renderMarkdownToHtml(markdown: string): string {
           i++;
           break;
         }
-
         mathLines.push(mathLine || "");
         i++;
       }
       continue;
     } else if (trimmed.startsWith("```")) {
       const language = trimmed.slice(3).trim();
-      const codeLines: string[] = [];
+      const codeLines = [];
       i++;
-
       while (i < lines.length) {
         const codeLine = lines[i];
         const codeTrimmed = codeLine?.trim() || "";
-
         if (codeTrimmed === "```") {
           const codeContent = codeLines.join("\n");
           const escapedCode = escapeHtml(codeContent);
-
           parts.push(
-            `<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm"><code class="language-${escapeHtml(language || "text")}">${escapedCode}</code></pre>`,
+            `<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm"><code class="language-${escapeHtml(language || "text")}">${escapedCode}</code></pre>`
           );
-
           i++;
           break;
         }
-
         codeLines.push(codeLine || "");
         i++;
       }
@@ -712,8 +607,6 @@ function renderMarkdownToHtml(markdown: string): string {
       i++;
       continue;
     }
-
-    // Check for image: ![alt](url)
     const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
     if (imageMatch && imageMatch[2]) {
       const alt = escapeHtml(imageMatch[1] ?? "");
@@ -722,20 +615,18 @@ function renderMarkdownToHtml(markdown: string): string {
       i++;
       continue;
     }
-
     const content = format(trimmed);
     parts.push(`<p>${content}</p>`);
     i++;
   }
-
   return `<div class="prose max-w-none">${parts.join("")}</div>`;
 }
-
-const MarkdownRenderer = ({ markdown }: { markdown: string }) => {
+var MarkdownRenderer = ({ markdown }) => {
   const html = React.useMemo(() => renderMarkdownToHtml(markdown), [markdown]);
-
-  return <div dangerouslySetInnerHTML={{ __html: html }} />;
+  return /* @__PURE__ */ jsx("div", { dangerouslySetInnerHTML: { __html: html } });
 };
-
-export default MarkdownRenderer;
-export { renderMarkdownToHtml };
+var markdown_renderer_default = MarkdownRenderer;
+export {
+  markdown_renderer_default as MarkdownRenderer,
+  renderMarkdownToHtml
+};
