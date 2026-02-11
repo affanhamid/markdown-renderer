@@ -611,7 +611,7 @@ function renderMarkdownToHtml(markdown) {
     if (imageMatch && imageMatch[2]) {
       const alt = escapeHtml(imageMatch[1] ?? "");
       const src = escapeHtml(imageMatch[2]);
-      parts.push(`<img src="${src}" alt="${alt}" class="max-w-full rounded my-1" />`);
+      parts.push(`<img src="${src}" alt="${alt}" class="max-w-full rounded my-3" />`);
       i++;
       continue;
     }
