@@ -301,7 +301,9 @@ This section combines **everything**:
        1. Third level ordered
        2. With **formatting**
 
-Here's a formula: $$\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$
+Here's a formula:
+
+$$\\int_0^\\infty e^{-x^2} dx = \\frac{\\sqrt{\\pi}}{2}$$
 
 And an image: ![example](https://picsum.photos/seed/final/600/200)
 
