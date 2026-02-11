@@ -76,7 +76,7 @@ var format = (text) => {
   text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
     const idx = images.length;
     images.push(
-      `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" class="inline max-w-full rounded" />`
+      `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" style="display:inline;max-width:100%;border-radius:0.25rem" />`
     );
     return `${IMG_PLACEHOLDER}${idx}`;
   });
@@ -611,7 +611,7 @@ function renderMarkdownToHtml(markdown) {
     if (imageMatch && imageMatch[2]) {
       const alt = escapeHtml(imageMatch[1] ?? "");
       const src = escapeHtml(imageMatch[2]);
-      parts.push(`<img src="${src}" alt="${alt}" class="max-w-full rounded my-3" />`);
+      parts.push(`<img src="${src}" alt="${alt}" style="max-width:100%;border-radius:0.25rem;margin:0.75rem 0" />`);
       i++;
       continue;
     }
