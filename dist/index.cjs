@@ -534,10 +534,11 @@ var parseListItems = (lines, startIndex, baseIndent, listType, depth = 0) => {
     nextIndex: i
   };
 };
-function renderMarkdownToHtml(markdown) {
+function renderMarkdownToHtml(markdown, options) {
   const lines = markdown.split("\n");
   const parts = [];
   let i = 0;
+  let codeBlockIndex = 0;
   while (i < lines.length) {
     const line = lines[i];
     if (!line) {
@@ -629,9 +630,19 @@ function renderMarkdownToHtml(markdown) {
         if (codeTrimmed === "```") {
           const codeContent = codeLines.join("\n");
           const escapedCode = escapeHtml(codeContent);
-          parts.push(
-            `<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm"><code class="language-${escapeHtml(language || "text")}">${escapedCode}</code></pre>`
-          );
+          const escapedLang = escapeHtml(language || "text");
+          const isExecutable = options?.executableLanguages && language && options.executableLanguages.includes(language.toLowerCase());
+          const currentIndex = codeBlockIndex;
+          codeBlockIndex++;
+          if (isExecutable) {
+            parts.push(
+              `<div class="md-code-block" data-language="${escapedLang}" data-code-index="${currentIndex}" data-executable="true"><div class="md-code-block-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none"><span style="font-size:0.75rem;color:#666;font-family:monospace">${escapedLang}</span></div><pre style="overflow-x:auto;border-radius:0 0 0.375rem 0.375rem;background:#f7f7f7;padding:0.75rem;font-size:0.875rem;margin:0;border:1px solid #e0e0e0;border-top:none"><code class="language-${escapedLang}" data-executable="true">${escapedCode}</code></pre><div class="md-code-output" data-output-for="${currentIndex}" style="display:none"></div></div>`
+            );
+          } else {
+            parts.push(
+              `<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm"><code class="language-${escapedLang}">${escapedCode}</code></pre>`
+            );
+          }
           i++;
           break;
         }
@@ -658,9 +669,96 @@ function renderMarkdownToHtml(markdown) {
   }
   return `<div class="prose max-w-none">${parts.join("")}</div>`;
 }
-var MarkdownRenderer = ({ markdown }) => {
-  const html = import_react.default.useMemo(() => renderMarkdownToHtml(markdown), [markdown]);
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { dangerouslySetInnerHTML: { __html: html } });
+var MarkdownRenderer = ({
+  markdown,
+  onRunCode,
+  executableLanguages = ["python", "r"]
+}) => {
+  const containerRef = (0, import_react.useRef)(null);
+  const onRunCodeRef = (0, import_react.useRef)(onRunCode);
+  onRunCodeRef.current = onRunCode;
+  const html = import_react.default.useMemo(
+    () => renderMarkdownToHtml(
+      markdown,
+      onRunCode ? { executableLanguages } : void 0
+    ),
+    [markdown, onRunCode, executableLanguages]
+  );
+  const handleRun = (0, import_react.useCallback)(
+    async (button, block) => {
+      const codeEl = block.querySelector("code[data-executable]");
+      const outputEl = block.querySelector(".md-code-output");
+      const language = block.getAttribute("data-language") || "";
+      const code = codeEl?.textContent || "";
+      if (!onRunCodeRef.current || !outputEl) return;
+      button.disabled = true;
+      button.textContent = "Running...";
+      outputEl.style.display = "block";
+      outputEl.textContent = "Running...";
+      outputEl.style.background = "#f7f7f7";
+      outputEl.style.color = "#333";
+      outputEl.className = "md-code-output";
+      try {
+        const result = await onRunCodeRef.current(code, language);
+        outputEl.textContent = "";
+        outputEl.className = "md-code-output";
+        if (result.error) {
+          outputEl.className = "md-code-output md-code-error";
+          outputEl.style.background = "#fef2f2";
+          outputEl.style.color = "#dc2626";
+          outputEl.textContent = result.error;
+        } else if (result.output) {
+          outputEl.style.background = "#f7f7f7";
+          outputEl.style.color = "#333";
+          outputEl.textContent = result.output;
+        }
+        if (result.images && result.images.length > 0) {
+          for (const src of result.images) {
+            const img = document.createElement("img");
+            img.src = src;
+            img.style.maxWidth = "100%";
+            img.style.borderRadius = "0.25rem";
+            img.style.marginTop = "0.5rem";
+            outputEl.appendChild(img);
+          }
+        }
+        if (!result.output && !result.error && (!result.images || result.images.length === 0)) {
+          outputEl.style.display = "none";
+        }
+      } catch (err) {
+        outputEl.className = "md-code-output md-code-error";
+        outputEl.style.background = "#fef2f2";
+        outputEl.style.color = "#dc2626";
+        outputEl.textContent = err instanceof Error ? err.message : "Execution failed";
+      } finally {
+        button.disabled = false;
+        button.textContent = "Run";
+      }
+    },
+    []
+  );
+  (0, import_react.useEffect)(() => {
+    const container = containerRef.current;
+    if (!container || !onRunCodeRef.current) return;
+    const blocks = container.querySelectorAll('[data-executable="true"]');
+    const buttons = [];
+    blocks.forEach((block) => {
+      const header = block.querySelector(".md-code-block-header");
+      if (!header) return;
+      if (header.querySelector(".md-run-btn")) return;
+      const btn = document.createElement("button");
+      btn.className = "md-run-btn";
+      btn.textContent = "Run";
+      btn.style.cssText = "padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit";
+      btn.addEventListener("click", () => handleRun(btn, block));
+      header.appendChild(btn);
+      buttons.push(btn);
+    });
+    return () => {
+      buttons.forEach((btn) => btn.remove());
+    };
+  }, [html, handleRun]);
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: containerRef, dangerouslySetInnerHTML: { __html: html } });
 };
 var markdown_renderer_default = MarkdownRenderer;
 // Annotate the CommonJS export names for ESM import in node:

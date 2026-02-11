@@ -825,3 +825,145 @@ Step-by-Step Approach:`;
     });
   });
 });
+
+describe("Executable code blocks", () => {
+  const execOptions = { executableLanguages: ["python", "r"] };
+
+  describe("renderMarkdownToHtml with executable options", () => {
+    test("should wrap python code block with executable structure", () => {
+      const input = "```python\nprint('hello')\n```";
+      const output = renderMarkdownToHtml(input, execOptions);
+      expect(output).toContain('data-executable="true"');
+      expect(output).toContain('data-language="python"');
+      expect(output).toContain('data-code-index="0"');
+      expect(output).toContain("md-code-block");
+      expect(output).toContain("md-code-block-header");
+      expect(output).toContain("md-code-output");
+      expect(output).toContain('data-output-for="0"');
+      expect(output).toContain("print(&#39;hello&#39;)");
+    });
+
+    test("should wrap r code block with executable structure", () => {
+      const input = "```r\nprint('hello')\n```";
+      const output = renderMarkdownToHtml(input, execOptions);
+      expect(output).toContain('data-executable="true"');
+      expect(output).toContain('data-language="r"');
+      expect(output).toContain("md-code-block");
+    });
+
+    test("should assign sequential indices across multiple blocks", () => {
+      const input =
+        "```python\na = 1\n```\n\n```javascript\nlet x = 1;\n```\n\n```python\nb = 2\n```";
+      const output = renderMarkdownToHtml(input, execOptions);
+      expect(output).toContain('data-code-index="0"');
+      // javascript block increments counter but is not executable
+      expect(output).toContain('data-code-index="2"');
+    });
+
+    test("should include language label in header", () => {
+      const input = "```python\nx = 1\n```";
+      const output = renderMarkdownToHtml(input, execOptions);
+      // Header should contain the language label text
+      const headerMatch = output.match(
+        /md-code-block-header[^>]*>.*?<span[^>]*>(.*?)<\/span>/s,
+      );
+      expect(headerMatch).toBeTruthy();
+      expect(headerMatch![1]).toBe("python");
+    });
+
+    test("should include output placeholder with display:none", () => {
+      const input = "```python\nx = 1\n```";
+      const output = renderMarkdownToHtml(input, execOptions);
+      expect(output).toMatch(/md-code-output.*?display:none/s);
+    });
+  });
+
+  describe("renderMarkdownToHtml without options (backwards compat)", () => {
+    test("should produce identical output to before for code blocks", () => {
+      const input = "```python\nprint('hello')\n```";
+      const output = renderMarkdownToHtml(input);
+      expect(output).not.toContain("data-executable");
+      expect(output).not.toContain("md-code-block");
+      expect(output).not.toContain("md-code-output");
+      expect(output).toContain('<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm">');
+      expect(output).toContain('class="language-python"');
+    });
+
+    test("should produce identical output when options is undefined", () => {
+      const input = "```javascript\nconsole.log(1);\n```";
+      const withoutOpts = renderMarkdownToHtml(input);
+      const withUndefined = renderMarkdownToHtml(input, undefined);
+      expect(withoutOpts).toBe(withUndefined);
+    });
+  });
+
+  describe("Non-executable languages", () => {
+    test("should not wrap javascript block even with options", () => {
+      const input = "```javascript\nconst x = 1;\n```";
+      const output = renderMarkdownToHtml(input, execOptions);
+      expect(output).not.toContain("data-executable");
+      expect(output).not.toContain("md-code-block");
+      expect(output).toContain('<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm">');
+    });
+
+    test("should not wrap code block without language", () => {
+      const input = "```\nsome code\n```";
+      const output = renderMarkdownToHtml(input, execOptions);
+      expect(output).not.toContain("data-executable");
+    });
+
+    test("should not wrap text code block", () => {
+      const input = "```text\nsome text\n```";
+      const output = renderMarkdownToHtml(input, execOptions);
+      expect(output).not.toContain("data-executable");
+    });
+  });
+
+  describe("Mixed blocks", () => {
+    test("should only wrap executable languages, leaving others unchanged", () => {
+      const input =
+        "```python\na = 1\n```\n\n```javascript\nlet x = 1;\n```\n\n```r\nx <- 1\n```";
+      const output = renderMarkdownToHtml(input, execOptions);
+
+      // Python and R should be wrapped (each block has data-executable on wrapper div + code element)
+      const execWrappers = output.match(/class="md-code-block"/g);
+      expect(execWrappers).toHaveLength(2);
+
+      // JavaScript should use the standard pre/code
+      expect(output).toContain('class="language-javascript"');
+      // The JS block should NOT have data-executable on its code element
+      const jsSection = output.match(
+        /<pre class="overflow-x-auto rounded[^"]*">\s*<code class="language-javascript">/,
+      );
+      expect(jsSection).toBeTruthy();
+    });
+
+    test("should handle markdown with no code blocks", () => {
+      const input = "# Hello\n\nSome text with **bold**.";
+      const output = renderMarkdownToHtml(input, execOptions);
+      expect(output).not.toContain("data-executable");
+      expect(output).not.toContain("md-code-block");
+      expect(output).toContain("<h1");
+      expect(output).toContain("<strong>bold</strong>");
+    });
+  });
+
+  describe("Custom executable languages", () => {
+    test("should respect custom executable languages list", () => {
+      const input = "```julia\nprintln(1)\n```";
+      const output = renderMarkdownToHtml(input, {
+        executableLanguages: ["julia"],
+      });
+      expect(output).toContain('data-executable="true"');
+      expect(output).toContain('data-language="julia"');
+    });
+
+    test("should not wrap python if not in custom list", () => {
+      const input = "```python\nprint(1)\n```";
+      const output = renderMarkdownToHtml(input, {
+        executableLanguages: ["julia"],
+      });
+      expect(output).not.toContain("data-executable");
+    });
+  });
+});
