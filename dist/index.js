@@ -287,48 +287,12 @@ var format = (text) => {
         const nextChar = i + 1 < text.length ? text[i + 1] : null;
         const prevChar = i > 0 ? text[i - 1] : null;
         if (nextChar !== "$" && prevChar !== "$" && prevChar !== "\\") {
-          if (nextChar && /[a-zA-Z0-9]/.test(nextChar)) {
+          if (nextChar && /[0-9]/.test(nextChar)) {
             currText = text[i] + currText;
             i--;
             continue;
           }
-          if (!nextChar || [
-            " ",
-            "	",
-            ".",
-            ",",
-            ")",
-            "]",
-            "}",
-            ";",
-            ":",
-            "!",
-            "?",
-            "-",
-            '"',
-            "'",
-            "%",
-            "\u2014",
-            "\uFF08",
-            "\uFF09",
-            "\uFF0C",
-            "\u3002",
-            "\uFF1A",
-            "\uFF1B",
-            "\uFF01",
-            "\uFF1F",
-            "\u3001",
-            "\u300B",
-            "\u300A",
-            "\u201C",
-            "\u201D",
-            "\u2018",
-            "\u2019",
-            "\u3010",
-            "\u3011",
-            "\u0964",
-            "\u0965"
-          ].includes(nextChar) || /[a-zA-Z]/.test(nextChar) || /[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u3040-\u309f\u30a0-\u30ff]/.test(nextChar)) {
+          if (hasMatchingDelimiter(text, i, "$")) {
             if (currText) {
               parts.unshift(escapeHtml(currText));
               currText = "";
