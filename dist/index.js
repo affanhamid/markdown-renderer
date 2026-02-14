@@ -563,7 +563,7 @@ function renderMarkdownToHtml(markdown, options) {
           codeBlockIndex++;
           if (isExecutable) {
             parts.push(
-              `<div class="md-code-block" data-language="${escapedLang}" data-code-index="${currentIndex}" data-executable="true"><div class="md-code-block-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none"><span style="font-size:0.75rem;color:#666;font-family:monospace">${escapedLang}</span></div><pre style="overflow-x:auto;border-radius:0 0 0.375rem 0.375rem;background:#f7f7f7;padding:0.75rem;font-size:0.875rem;margin:0;border:1px solid #e0e0e0;border-top:none"><code class="language-${escapedLang}" data-executable="true">${escapedCode}</code></pre><div class="md-code-output" data-output-for="${currentIndex}" style="display:none"></div></div>`
+              `<div class="md-code-block" data-language="${escapedLang}" data-code-index="${currentIndex}" data-executable="true"><div class="md-code-block-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none"><span style="font-size:0.75rem;color:#666;font-family:monospace">${escapedLang}</span></div><pre style="overflow-x:auto;border-radius:0 0 0.375rem 0.375rem;background:#f7f7f7;color:#1f2937;padding:0.75rem;font-size:0.875rem;margin:0;border:1px solid #e0e0e0;border-top:none"><code class="language-${escapedLang}" data-executable="true">${escapedCode}</code></pre><div class="md-code-output" data-output-for="${currentIndex}" style="display:none"></div></div>`
             );
           } else {
             parts.push(
@@ -604,12 +604,13 @@ var MarkdownRenderer = ({
   const containerRef = useRef(null);
   const onRunCodeRef = useRef(onRunCode);
   onRunCodeRef.current = onRunCode;
+  const hasRunCode = !!onRunCode;
   const html = React.useMemo(
     () => renderMarkdownToHtml(
       markdown,
-      onRunCode ? { executableLanguages } : void 0
+      hasRunCode ? { executableLanguages } : void 0
     ),
-    [markdown, onRunCode, executableLanguages]
+    [markdown, hasRunCode, executableLanguages]
   );
   const handleRun = useCallback(
     async (button, block) => {

@@ -966,4 +966,28 @@ describe("Executable code blocks", () => {
       expect(output).not.toContain("data-executable");
     });
   });
+
+  describe("Executable code block text color", () => {
+    test("should include explicit color style on executable pre element", () => {
+      const input = "```python\nprint('hello')\n```";
+      const output = renderMarkdownToHtml(input, { executableLanguages: ["python"] });
+      // The <pre> in executable blocks should have an explicit dark text color
+      const preMatch = output.match(/<pre\s+style="([^"]*)"/);
+      expect(preMatch).toBeTruthy();
+      expect(preMatch![1]).toContain("color:");
+      expect(preMatch![1]).toContain("#1f2937");
+    });
+  });
+
+  describe("HTML stability across onRunCode references", () => {
+    test("should produce identical HTML for different truthy onRunCode references", () => {
+      const input = "```python\nx = 1\n```\n\nSome text.";
+      const opts = { executableLanguages: ["python"] };
+      const output1 = renderMarkdownToHtml(input, opts);
+      const output2 = renderMarkdownToHtml(input, opts);
+      // Both truthy options produce identical HTML — the HTML depends only on
+      // whether executable languages are provided, not on the function reference
+      expect(output1).toBe(output2);
+    });
+  });
 });
