@@ -600,7 +600,7 @@ function renderMarkdownToHtml(markdown, options) {
           codeBlockIndex++;
           if (isExecutable) {
             parts.push(
-              `<div class="md-code-block" data-language="${escapedLang}" data-code-index="${currentIndex}" data-executable="true"><div class="md-code-block-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none"><span style="font-size:0.75rem;color:#666;font-family:monospace">${escapedLang}</span></div><pre style="overflow-x:auto;border-radius:0 0 0.375rem 0.375rem;background:#f7f7f7;color:#1f2937;padding:0.75rem;font-size:0.875rem;margin:0;border:1px solid #e0e0e0;border-top:none"><code class="language-${escapedLang}" data-executable="true">${escapedCode}</code></pre><div class="md-code-output" data-output-for="${currentIndex}" style="display:none"></div></div>`
+              `<div class="md-code-block" data-language="${escapedLang}" data-code-index="${currentIndex}" data-executable="true"><div class="md-code-block-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none"><span style="font-size:0.75rem;color:#666;font-family:monospace">${escapedLang}</span><button class="md-run-btn" data-code-index="${currentIndex}" style="padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit">Run</button></div><pre style="overflow-x:auto;border-radius:0 0 0.375rem 0.375rem;background:#f7f7f7;color:#1f2937;padding:0.75rem;font-size:0.875rem;margin:0;border:1px solid #e0e0e0;border-top:none"><code class="language-${escapedLang}" data-executable="true">${escapedCode}</code></pre><div class="md-code-output" data-output-for="${currentIndex}" style="display:none"></div></div>`
             );
           } else {
             parts.push(
@@ -705,22 +705,19 @@ var MarkdownRenderer = ({
   (0, import_react.useEffect)(() => {
     const container = containerRef.current;
     if (!container || !onRunCodeRef.current) return;
-    const blocks = container.querySelectorAll('[data-executable="true"]');
-    const buttons = [];
-    blocks.forEach((block) => {
-      const header = block.querySelector(".md-code-block-header");
-      if (!header) return;
-      if (header.querySelector(".md-run-btn")) return;
-      const btn = document.createElement("button");
-      btn.className = "md-run-btn";
-      btn.textContent = "Run";
-      btn.style.cssText = "padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit";
-      btn.addEventListener("click", () => handleRun(btn, block));
-      header.appendChild(btn);
-      buttons.push(btn);
+    const buttons = container.querySelectorAll(".md-run-btn");
+    const handlers = [];
+    buttons.forEach((btn) => {
+      const block = btn.closest(".md-code-block");
+      if (!block) return;
+      const handler = () => handleRun(btn, block);
+      btn.addEventListener("click", handler);
+      handlers.push([btn, handler]);
     });
     return () => {
-      buttons.forEach((btn) => btn.remove());
+      handlers.forEach(
+        ([btn, handler]) => btn.removeEventListener("click", handler)
+      );
     };
   }, [html, handleRun]);
   return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: containerRef, dangerouslySetInnerHTML: { __html: html } });
