@@ -1,6 +1,14 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import "katex/dist/katex.min.css";
 import katex from "katex";
+import { codeToHtml } from "shiki";
+import { normalizeMathMarkdownDelimiters } from "./math-markdown";
+
+// Cache for highlighted code to avoid re-highlighting
+const highlightCache = new Map<string, string>();
+
+// Helper to generate cache key
+const getCacheKey = (code: string, lang: string) => `${lang}:${code}`;
 
 export interface CodeExecutionResult {
   output: string;
@@ -46,46 +54,60 @@ function getColorClass(colorName: string): string {
 }
 
 // Helper to check if a delimiter has a matching pair
+// Search backwards from startIndex for the closing delimiter
+// When parsing backwards, we're looking for the opening delimiter
+// We need to account for other delimiter pairs in between
 function hasMatchingDelimiter(text: string, startIndex: number, delimiter: string): boolean {
   let i = startIndex - 1;
-  let depth = 0;
+  let depth = 0; // How many closing delimiters we've seen (parsing backwards)
 
   while (i >= 0) {
+    // For *, check it's not part of ** or ***
     if (delimiter === "*" && text[i] === "*") {
       const nextChar = i + 1 < text.length ? text[i + 1] : null;
       const prevChar = i > 0 ? text[i - 1] : null;
       if (nextChar !== "*" && prevChar !== "*") {
         if (depth === 0) {
-          return true;
+          return true; // Found the matching closing *
         }
-        depth--;
+        depth--; // We passed through another opening delimiter
       }
-    } else if (delimiter === "**" && i >= 1 && text.slice(i - 1, i + 1) === "**") {
+    }
+    // For **, check it's not part of ***
+    else if (delimiter === "**" && i >= 1 && text.slice(i - 1, i + 1) === "**") {
       const prevChar = i > 1 ? text[i - 2] : null;
+      // Don't check nextNextChar if it would overlap with our starting position
+      // When i+2 >= startIndex, we're checking the delimiter we started from
       const nextNextChar = i + 2 < text.length && i + 2 < startIndex ? text[i + 2] : null;
       if (prevChar !== "*" && nextNextChar !== "*") {
         if (depth === 0) {
-          return true;
+          return true; // Found the matching closing **
         }
-        depth--;
+        depth--; // We passed through another opening delimiter
       }
-      i--;
-    } else if (delimiter === "***" && i >= 2 && text.slice(i - 2, i + 1) === "***") {
+      i--; // Skip the second * since we processed **
+    }
+    // For ***, check for exact match
+    else if (delimiter === "***" && i >= 2 && text.slice(i - 2, i + 1) === "***") {
       if (depth === 0) {
         return true;
       }
       depth--;
-      i -= 2;
-    } else if (delimiter === "$" && text[i] === "$") {
+      i -= 2; // Skip the other two * since we processed ***
+    }
+    // For $, check it's a valid closing $ (same rules as in format())
+    else if (delimiter === "$" && text[i] === "$") {
       const nextChar = i + 1 < text.length ? text[i + 1] : null;
       const prevChar = i > 0 ? text[i - 1] : null;
       if (nextChar !== "$" && prevChar !== "$" && prevChar !== "\\") {
         if (depth === 0) {
           return true;
         }
-        depth--;
+        depth--; // We passed through another opening delimiter
       }
-    } else if (delimiter === "`" && text[i] === "`") {
+    }
+    // For `, check for matching backtick
+    else if (delimiter === "`" && text[i] === "`") {
       if (depth === 0) {
         return true;
       }
@@ -100,7 +122,7 @@ function hasMatchingDelimiter(text: string, startIndex: number, delimiter: strin
 const IMG_PLACEHOLDER = "\x01IMG";
 
 const format = (text: string): string => {
-  // Pre-process inline images: ![alt](url) → placeholder
+  // Pre-process inline images: ![alt](url) -> placeholder
   const images: string[] = [];
   text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt: string, url: string) => {
     const idx = images.length;
@@ -124,26 +146,29 @@ const format = (text: string): string => {
     // Handle inline code - takes precedence over all other formatting
     if (inCode) {
       if (text[i] === "`") {
+        // Found the opening backtick
         parts.unshift(`<code>${escapeHtml(currText)}</code>`);
         currText = "";
         inCode = false;
         i--;
         continue;
       }
+      // Inside code, just accumulate characters (no formatting)
       currText = text[i] + currText;
       i--;
       continue;
     }
 
-    // Check if this is an escaped backtick
+    // Check if this is an escaped backtick (like \`) - handle it first
     if (text[i] === "`" && i > 0 && text[i - 1] === "\\") {
       currText = "`" + currText;
-      i -= 2;
+      i -= 2; // Skip both the backtick and the backslash
       continue;
     }
 
-    // Check for code delimiter
+    // Check for code delimiter (not inside other formatting)
     if (text[i] === "`" && !inLatex && !inBoldItalics && !inBold && !inItalic) {
+      // Only enter code mode if there's a matching opening backtick
       if (hasMatchingDelimiter(text, i, "`")) {
         if (currText) {
           parts.unshift(escapeHtml(currText));
@@ -155,7 +180,7 @@ const format = (text: string): string => {
       }
     }
 
-    // Check if this is an escaped $
+    // Check if this is an escaped $ (like \$) - handle it first
     if (text[i] === "$" && i > 0 && text[i - 1] === "\\") {
       if (inLatex) {
         currText = "\\$" + currText;
@@ -167,12 +192,14 @@ const format = (text: string): string => {
     }
 
     if (inLatex) {
+      // Handle closing $ of latex (actually the opening $ when parsing backwards)
       if (text[i] === "$") {
         const nextChar = i + 1 < text.length ? text[i + 1] : null;
         const prevChar = i > 0 ? text[i - 1] : null;
         if (nextChar !== "$" && prevChar !== "$" && prevChar !== "\\") {
           let mathContent = currText;
 
+          // Check if we need to add \left and \right
           if (needsLeftRight) {
             const leftMap: Record<string, string> = {
               "(": "\\left(",
@@ -185,14 +212,18 @@ const format = (text: string): string => {
               "}": "\\right\\}",
             };
 
+            // Check if prevChar matches the opening bracket
             if (prevChar && prevChar === needsLeftRight.open) {
               mathContent = leftMap[prevChar] + mathContent + rightMap[needsLeftRight.close];
+              // Skip the opening bracket since we've incorporated it into the math
               i--;
             } else if (needsLeftRight) {
+              // If opening bracket not found but we expected one, don't add \left/\right
               parts.unshift(escapeHtml(needsLeftRight.close));
               needsLeftRight = null;
             }
           } else {
+            // Reset needsLeftRight if it was set but we're not using it
             needsLeftRight = null;
           }
 
@@ -216,6 +247,7 @@ const format = (text: string): string => {
           }
         }
       }
+      // Skip closing bracket if we detected it (it will be added to math with \right)
       if (needsLeftRight && text[i] === needsLeftRight.close) {
         i--;
         continue;
@@ -223,6 +255,7 @@ const format = (text: string): string => {
       currText = text[i] + currText;
       i--;
     } else if (inBoldItalics) {
+      // Handle closing *** of bold+italics
       if (i >= 2 && text.slice(i - 2, i + 1) === "***") {
         parts.unshift(`<strong><em>${format(currText)}</em></strong>`);
         currText = "";
@@ -233,6 +266,7 @@ const format = (text: string): string => {
       currText = text[i] + currText;
       i--;
     } else if (inBold) {
+      // Handle closing ** of bold
       if (i >= 1 && text.slice(i - 1, i + 1) === "**") {
         parts.unshift(`<strong>${format(currText)}</strong>`);
         currText = "";
@@ -243,6 +277,7 @@ const format = (text: string): string => {
       currText = text[i] + currText;
       i--;
     } else if (inItalic) {
+      // Handle closing * of italic
       if (text[i] === "*") {
         const nextChar = i + 1 < text.length ? text[i + 1] : null;
         const prevChar = i > 0 ? text[i - 1] : null;
@@ -257,12 +292,14 @@ const format = (text: string): string => {
       currText = text[i] + currText;
       i--;
     } else {
+      // Not in any mode - check for opening markers
       const prevCharInOriginal = i > 0 ? text[i - 1] : null;
       if (text[i] && [")", "]", "}"].includes(text[i]!) && prevCharInOriginal === "$") {
+        // This closing bracket will be part of math, so skip it
         i--;
         continue;
       }
-      // Check for {/color} closing tag
+      // Check for {/color} closing tag (parsing backwards, so we encounter this first)
       if (text[i] === "}" && i >= 7 && text.slice(i - 7, i + 1) === "{/color}") {
         if (currText) {
           parts.unshift(escapeHtml(currText));
@@ -330,23 +367,70 @@ const format = (text: string): string => {
           }
         }
       }
-      // Check for $ (latex)
+      // Check for $ (latex) - project's stricter disambiguation
       if (text[i] === "$") {
         const nextChar = i + 1 < text.length ? text[i + 1] : null;
         const prevChar = i > 0 ? text[i - 1] : null;
         if (nextChar !== "$" && prevChar !== "$" && prevChar !== "\\") {
-          // Reject digits after $ to avoid treating currency like $20 as math
-          if (nextChar && /[0-9]/.test(nextChar)) {
+          // If $ is at the start of a word/number (like $20), it's currency - reject $ + any alphanumeric
+          if (nextChar && /[a-zA-Z0-9]/.test(nextChar)) {
             currText = text[i] + currText;
             i--;
             continue;
           }
-          if (hasMatchingDelimiter(text, i, "$")) {
+          // If $ is at the end, check for valid closing characters
+          // Include Chinese/CJK punctuation and characters as valid terminators
+          if (
+            !nextChar ||
+            [
+              " ",
+              "\t",
+              ".",
+              ",",
+              ")",
+              "]",
+              "}",
+              ";",
+              ":",
+              "!",
+              "?",
+              "-",
+              '"',
+              "'",
+              "%",
+              "\u2014",
+              // Chinese/fullwidth punctuation
+              "\uFF08", // （
+              "\uFF09", // ）
+              "\uFF0C", // ，
+              "\u3002", // 。
+              "\uFF1A", // ：
+              "\uFF1B", // ；
+              "\uFF01", // ！
+              "\uFF1F", // ？
+              "\u3001", // 、
+              "\u300B", // 》
+              "\u300A", // 《
+              "\u201C", // \u201c
+              "\u201D", // \u201d
+              "\u2018", // \u2018
+              "\u2019", // \u2019
+              "\u3010", // 【
+              "\u3011", // 】
+              // Hindi/Devanagari punctuation
+              "\u0964", // । (Devanagari Danda - full stop)
+              "\u0965", // ॥ (Devanagari Double Danda)
+            ].includes(nextChar) ||
+            /[a-zA-Z]/.test(nextChar) ||
+            // Allow CJK characters (Chinese, Japanese, Korean) after $
+            /[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u3040-\u309f\u30a0-\u30ff]/.test(nextChar)
+          ) {
             if (currText) {
               parts.unshift(escapeHtml(currText));
               currText = "";
             }
 
+            // Check if nextChar is a closing bracket
             if (nextChar && [")", "]", "}"].includes(nextChar)) {
               const bracketMap: Record<string, string> = {
                 ")": "(",
@@ -373,6 +457,7 @@ const format = (text: string): string => {
     }
   }
 
+  // Any remaining text should be plain
   if (currText) {
     parts.unshift(escapeHtml(currText));
   }
@@ -388,16 +473,84 @@ const format = (text: string): string => {
   return result;
 };
 
+// Helper function to get indentation level (number of leading spaces/tabs)
 const getIndentLevel = (line: string): number => {
   let indent = 0;
   for (let i = 0; i < line.length; i++) {
     if (line[i] === " ") indent++;
-    else if (line[i] === "\t") indent += 4;
+    else if (line[i] === "\t")
+      indent += 4; // Treat tab as 4 spaces
     else break;
   }
   return indent;
 };
 
+const isTableSeparatorRow = (line: string): boolean => {
+  const trimmed = line.trim();
+  if (!trimmed.includes("|")) return false;
+
+  const cells = trimmed
+    .split("|")
+    .map((cell) => cell.trim())
+    .filter((cell) => cell.length > 0);
+
+  if (cells.length === 0) return false;
+  return cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+};
+
+const splitTableRow = (line: string): string[] => {
+  let row = line.trim();
+  if (row.startsWith("|")) row = row.slice(1);
+  if (row.endsWith("|")) row = row.slice(0, -1);
+  return row.split("|").map((cell) => cell.trim());
+};
+
+const renderTableBlock = (rows: string[]): string => {
+  if (rows.length < 2) return rows.map((line) => `<p>${format(line.trim())}</p>`).join("");
+
+  const headerCells = splitTableRow(rows[0] || "");
+  const separatorCells = splitTableRow(rows[1] || "");
+  const bodyRows = rows.slice(2);
+
+  if (headerCells.length === 0 || separatorCells.length === 0) {
+    return rows.map((line) => `<p>${format(line.trim())}</p>`).join("");
+  }
+
+  const alignments = separatorCells.map((cell) => {
+    const startsWithColon = cell.startsWith(":");
+    const endsWithColon = cell.endsWith(":");
+    if (startsWithColon && endsWithColon) return "center";
+    if (endsWithColon) return "right";
+    return "left";
+  });
+
+  const cellBorder = "border:1px solid var(--color-paper-200);padding:0.5rem 0.75rem;";
+
+  const headerHtml = headerCells
+    .map((cell, index) => {
+      const alignment = alignments[index] || "left";
+      return `<th style="${cellBorder}text-align:${alignment};font-weight:600">${format(cell)}</th>`;
+    })
+    .join("");
+
+  const bodyHtml = bodyRows
+    .filter((row) => row.trim().includes("|"))
+    .map((row) => {
+      const cells = splitTableRow(row);
+      const cellHtml = cells
+        .map((cell, index) => {
+          const alignment = alignments[index] || "left";
+          return `<td style="${cellBorder}text-align:${alignment};vertical-align:top">${format(cell)}</td>`;
+        })
+        .join("");
+      return `<tr>${cellHtml}</tr>`;
+    })
+    .join("");
+
+  return `<div style="margin:1rem 0;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.875rem"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
+};
+
+// Helper function to parse list items recursively
 const parseListItems = (
   lines: string[],
   startIndex: number,
@@ -418,15 +571,18 @@ const parseListItems = (
     const indent = getIndentLevel(line);
     const trimmed = line.trim();
 
+    // If indent is less than base, we've exited this list
     if (indent < baseIndent) {
       break;
     }
 
+    // If indent is same as base, check if it's a list item of the same type
     if (indent === baseIndent) {
       if (listType === "ul" && (trimmed.startsWith("* ") || trimmed.startsWith("- "))) {
         const content = format(trimmed.slice(2));
         let itemContent = `<li>${content}`;
 
+        // Collect continuation lines and nested content
         i++;
         const continuationLines: string[] = [];
 
@@ -440,6 +596,7 @@ const parseListItems = (
           const nextIndent = getIndentLevel(nextLine);
           const nextTrimmed = nextLine.trim();
 
+          // Stop if we hit another list item at the same level
           if (
             nextIndent === baseIndent &&
             (nextTrimmed.startsWith("* ") || nextTrimmed.startsWith("- "))
@@ -447,10 +604,12 @@ const parseListItems = (
             break;
           }
 
+          // Stop if indent is at or below base level (not a nested item)
           if (nextIndent <= baseIndent) {
             break;
           }
 
+          // Check if it's a nested list
           if (
             nextIndent > baseIndent &&
             (nextTrimmed.startsWith("* ") ||
@@ -465,12 +624,15 @@ const parseListItems = (
             continue;
           }
 
+          // Collect as continuation content
           continuationLines.push(nextLine);
           i++;
         }
 
+        // Process continuation lines as markdown
         if (continuationLines.length > 0) {
           const continuationHtml = renderMarkdownToHtml(continuationLines.join("\n"));
+          // Extract content from the wrapper div
           const match = continuationHtml.match(/<div class="prose[^"]*">(.*)<\/div>/s);
           if (match && match[1]) {
             itemContent += match[1];
@@ -485,6 +647,7 @@ const parseListItems = (
           const content = format(match[2]);
           let itemContent = `<li>${content}`;
 
+          // Collect continuation lines and nested content
           i++;
           const continuationLines: string[] = [];
 
@@ -498,14 +661,17 @@ const parseListItems = (
             const nextIndent = getIndentLevel(nextLine);
             const nextTrimmed = nextLine.trim();
 
+            // Stop if we hit another list item at the same level
             if (nextIndent === baseIndent && nextTrimmed.match(/^\d+\. /)) {
               break;
             }
 
+            // Stop if indent is at or below base level (not a nested item)
             if (nextIndent <= baseIndent) {
               break;
             }
 
+            // Check if it's a nested list
             if (
               nextIndent > baseIndent &&
               (nextTrimmed.startsWith("* ") ||
@@ -520,12 +686,15 @@ const parseListItems = (
               continue;
             }
 
+            // Collect as continuation content
             continuationLines.push(nextLine);
             i++;
           }
 
+          // Process continuation lines as markdown
           if (continuationLines.length > 0) {
             const continuationHtml = renderMarkdownToHtml(continuationLines.join("\n"));
+            // Extract content from the wrapper div
             const match = continuationHtml.match(/<div class="prose[^"]*">(.*)<\/div>/s);
             if (match && match[1]) {
               itemContent += match[1];
@@ -538,15 +707,18 @@ const parseListItems = (
           break;
         }
       } else {
+        // Not a list item at this level, exit
         break;
       }
     } else {
+      // Indent doesn't match - skip or break
       i++;
     }
   }
 
   const tag = listType === "ul" ? "ul" : "ol";
 
+  // Determine list style based on depth
   let styleClass = "ml-5 marker:text-current marker:font-bold ";
   if (listType === "ol") {
     if (depth === 0) styleClass += "list-decimal";
@@ -568,7 +740,8 @@ function renderMarkdownToHtml(
   markdown: string,
   options?: { executableLanguages?: string[] },
 ): string {
-  const lines = markdown.split("\n");
+  const normalizedMarkdown = normalizeMathMarkdownDelimiters(markdown);
+  const lines = normalizedMarkdown.split("\n");
   const parts: string[] = [];
   let i = 0;
   let codeBlockIndex = 0;
@@ -619,6 +792,7 @@ function renderMarkdownToHtml(
       i = result.nextIndex;
       continue;
     } else if (trimmed.startsWith("$$") && trimmed.endsWith("$$") && trimmed.length >= 4) {
+      // Single-line block math: $$content$$
       const mathContent = trimmed.slice(2, -2).trim();
       try {
         const mathHtml = katex.renderToString(preprocessLatex(mathContent), {
@@ -632,14 +806,16 @@ function renderMarkdownToHtml(
       i++;
       continue;
     } else if (trimmed === "$$") {
+      // Multi-line block math: $$ on separate lines
       const mathLines: string[] = [];
-      i++;
+      i++; // Skip opening $$
 
       while (i < lines.length) {
         const mathLine = lines[i];
         const mathTrimmed = mathLine?.trim() || "";
 
         if (mathTrimmed === "$$") {
+          // Found closing $$
           const mathContent = mathLines.join("\n");
           try {
             const mathHtml = katex.renderToString(preprocessLatex(mathContent), {
@@ -648,9 +824,10 @@ function renderMarkdownToHtml(
             });
             parts.push(`<div>${mathHtml}</div>`);
           } catch {
+            // If KaTeX fails, render as escaped text
             parts.push(`<div>${format(mathContent)}</div>`);
           }
-          i++;
+          i++; // Skip closing $$
           break;
         }
 
@@ -659,15 +836,17 @@ function renderMarkdownToHtml(
       }
       continue;
     } else if (trimmed.startsWith("```")) {
+      // Code block
       const language = trimmed.slice(3).trim();
       const codeLines: string[] = [];
-      i++;
+      i++; // Skip opening ```
 
       while (i < lines.length) {
         const codeLine = lines[i];
         const codeTrimmed = codeLine?.trim() || "";
 
         if (codeTrimmed === "```") {
+          // Found closing ```
           const codeContent = codeLines.join("\n");
           const escapedCode = escapeHtml(codeContent);
           const escapedLang = escapeHtml(language || "text");
@@ -690,12 +869,19 @@ function renderMarkdownToHtml(
                 `</div>`,
             );
           } else {
+            // Shiki-ready code block with copy button (project style)
             parts.push(
-              `<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm"><code class="language-${escapedLang}">${escapedCode}</code></pre>`,
+              `<div class="code-block-wrapper relative group">
+              <button class="copy-btn absolute top-2 right-2 p-1.5 rounded bg-paper-200 hover:bg-paper-300 dark:bg-oxford-700 dark:hover:bg-oxford-600 opacity-0 group-hover:opacity-100 transition-opacity" data-code="${escapeHtml(codeContent)}" title="Copy code">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="copy-icon"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="check-icon hidden text-green-600"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <pre data-lang="${escapeHtml(language || "text")}" data-code="${escapeHtml(codeContent)}"><code class="language-${escapeHtml(language || "text")}">${escapedCode}</code></pre>
+            </div>`,
             );
           }
 
-          i++;
+          i++; // Skip closing ```
           break;
         }
 
@@ -719,6 +905,45 @@ function renderMarkdownToHtml(
       continue;
     }
 
+    // Table detection (from project)
+    const nextNonEmptyIndex = (() => {
+      let j = i + 1;
+      while (j < lines.length && !(lines[j] || "").trim()) {
+        j++;
+      }
+      return j;
+    })();
+
+    if (
+      trimmed.includes("|") &&
+      nextNonEmptyIndex < lines.length &&
+      isTableSeparatorRow((lines[nextNonEmptyIndex] || "").trim())
+    ) {
+      const tableLines: string[] = [trimmed];
+      tableLines.push((lines[nextNonEmptyIndex] || "").trim());
+      i = nextNonEmptyIndex + 1;
+
+      while (i < lines.length) {
+        const candidate = (lines[i] || "").trim();
+        if (!candidate) {
+          const lookahead = i + 1;
+          if (lookahead < lines.length && (lines[lookahead] || "").trim().includes("|")) {
+            i++;
+            continue;
+          }
+          break;
+        }
+        if (!candidate.includes("|")) {
+          break;
+        }
+        tableLines.push(candidate);
+        i++;
+      }
+
+      parts.push(renderTableBlock(tableLines));
+      continue;
+    }
+
     const content = format(trimmed);
     parts.push(`<p>${content}</p>`);
     i++;
@@ -735,17 +960,97 @@ const MarkdownRenderer = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const onRunCodeRef = useRef(onRunCode);
   onRunCodeRef.current = onRunCode;
+  const [html, setHtml] = React.useState<string>("");
 
   const hasRunCode = !!onRunCode;
-  const html = React.useMemo(
-    () =>
-      renderMarkdownToHtml(
-        markdown,
-        hasRunCode ? { executableLanguages } : undefined,
-      ),
-    [markdown, hasRunCode, executableLanguages],
-  );
 
+  // Render markdown to HTML
+  React.useEffect(() => {
+    const rendered = renderMarkdownToHtml(
+      markdown,
+      hasRunCode ? { executableLanguages } : undefined,
+    );
+    setHtml(rendered);
+  }, [markdown, hasRunCode, executableLanguages]);
+
+  // Shiki highlighting + copy button handlers (from project)
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const highlightCodeBlocks = async () => {
+      const codeBlocks = containerRef.current?.querySelectorAll("pre[data-lang]");
+      if (!codeBlocks) return;
+
+      for (const block of Array.from(codeBlocks)) {
+        const preElement = block as HTMLPreElement;
+        const lang = preElement.getAttribute("data-lang") || "plaintext";
+        const code = preElement.getAttribute("data-code") || "";
+
+        // Use "plaintext" for unknown languages instead of "text"
+        const effectiveLang = lang === "text" || lang === "" ? "plaintext" : lang;
+
+        // Check cache first
+        const cacheKey = getCacheKey(code, effectiveLang);
+        let highlighted = highlightCache.get(cacheKey);
+
+        if (!highlighted) {
+          try {
+            highlighted = await codeToHtml(code, {
+              lang: effectiveLang,
+              theme: "github-light",
+            });
+            highlightCache.set(cacheKey, highlighted);
+          } catch (error) {
+            // If highlighting fails, add a class for CSS styling
+            console.warn(`Failed to highlight code block with language '${effectiveLang}':`, error);
+            preElement.classList.add("code-plain");
+            continue;
+          }
+        }
+
+        // Replace the pre element with highlighted version
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = highlighted;
+        const newPre = tempDiv.firstElementChild;
+        if (newPre) {
+          preElement.replaceWith(newPre);
+        }
+      }
+    };
+
+    // Add copy button click handlers
+    const copyButtons = containerRef.current.querySelectorAll(".copy-btn");
+    copyButtons.forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const button = btn as HTMLButtonElement;
+        const code = button.getAttribute("data-code") || "";
+
+        try {
+          await navigator.clipboard.writeText(code);
+          const copyIcon = button.querySelector(".copy-icon");
+          const checkIcon = button.querySelector(".check-icon");
+
+          if (copyIcon && checkIcon) {
+            copyIcon.classList.add("hidden");
+            checkIcon.classList.remove("hidden");
+
+            setTimeout(() => {
+              copyIcon.classList.remove("hidden");
+              checkIcon.classList.add("hidden");
+            }, 2000);
+          }
+        } catch (err) {
+          console.error("Failed to copy code:", err);
+        }
+      });
+    });
+
+    highlightCodeBlocks();
+  }, [html]);
+
+  // Run button handler (from library)
   const handleRun = useCallback(
     async (button: HTMLButtonElement, block: Element) => {
       const codeEl = block.querySelector("code[data-executable]");
@@ -808,6 +1113,7 @@ const MarkdownRenderer = ({
     [],
   );
 
+  // Run button click handler useEffect (from library)
   useEffect(() => {
     const container = containerRef.current;
     if (!container || !onRunCodeRef.current) return;
