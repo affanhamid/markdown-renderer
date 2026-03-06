@@ -2,7 +2,124 @@
 import React, { useRef, useEffect, useCallback } from "react";
 import "katex/dist/katex.min.css";
 import katex from "katex";
+import { codeToHtml } from "shiki";
+
+// src/math-markdown.ts
+var INLINE_CODE_SPLIT_REGEX = /(`[^`]*`)/g;
+function normalizeMathSegment(segment) {
+  let normalized = segment.replace(/\\\(([\s\S]*?)\\\)/g, (_match, expr) => `$${expr.trim()}$`).replace(/\\\[([^\n]+?)\\\]/g, (_match, expr) => `$${expr.trim()}$`);
+  normalized = normalized.replace(/\$\$([^$\n]+?)\$\$/g, (match, expr, offset) => {
+    const before = normalized.slice(0, offset);
+    const after = normalized.slice(offset + match.length);
+    if (!before.trim() && !after.trim()) {
+      return `$$${expr.trim()}$$`;
+    }
+    return `$${expr.trim()}$`;
+  });
+  return normalized;
+}
+function normalizeInlineMathLine(line) {
+  const parts = line.split(INLINE_CODE_SPLIT_REGEX);
+  return parts.map((part, index) => {
+    if (index % 2 === 1) return part;
+    return normalizeMathSegment(part);
+  }).join("");
+}
+function normalizeMathMarkdownDelimiters(markdown) {
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
+  const normalized = [];
+  let inCodeFence = false;
+  let inBracketMathBlock = false;
+  let bracketMathBuffer = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("```")) {
+      if (inBracketMathBlock) {
+        normalized.push("\\[");
+        normalized.push(...bracketMathBuffer);
+        inBracketMathBlock = false;
+        bracketMathBuffer = [];
+      }
+      inCodeFence = !inCodeFence;
+      normalized.push(line);
+      continue;
+    }
+    if (inCodeFence) {
+      normalized.push(line);
+      continue;
+    }
+    if (inBracketMathBlock) {
+      const closeIdx = line.indexOf("\\]");
+      if (closeIdx !== -1) {
+        const beforeClose = line.slice(0, closeIdx);
+        if (beforeClose.trim()) {
+          bracketMathBuffer.push(beforeClose.trimEnd());
+        }
+        normalized.push("$$");
+        const mathContent = bracketMathBuffer.join("\n").trim();
+        if (mathContent) {
+          normalized.push(mathContent);
+        }
+        normalized.push("$$");
+        inBracketMathBlock = false;
+        bracketMathBuffer = [];
+        const remainder = line.slice(closeIdx + 2);
+        if (remainder.trim()) {
+          normalized.push(normalizeInlineMathLine(remainder));
+        }
+      } else {
+        bracketMathBuffer.push(line);
+      }
+      continue;
+    }
+    const openIdx = line.indexOf("\\[");
+    if (openIdx !== -1) {
+      const closeIdx = line.indexOf("\\]", openIdx + 2);
+      if (closeIdx !== -1) {
+        const expr = line.slice(openIdx + 2, closeIdx).trim();
+        const before2 = line.slice(0, openIdx);
+        const after = line.slice(closeIdx + 2);
+        if (!before2.trim() && !after.trim()) {
+          normalized.push("$$");
+          if (expr) {
+            normalized.push(expr);
+          }
+          normalized.push("$$");
+        } else {
+          normalized.push(normalizeInlineMathLine(`${before2}$${expr}$${after}`));
+        }
+        continue;
+      }
+      const before = line.slice(0, openIdx);
+      if (!before.trim()) {
+        const afterOpen = line.slice(openIdx + 2);
+        inBracketMathBlock = true;
+        bracketMathBuffer = [];
+        if (afterOpen.trim()) {
+          bracketMathBuffer.push(afterOpen.trimEnd());
+        }
+        continue;
+      }
+    }
+    normalized.push(normalizeInlineMathLine(line));
+  }
+  if (inBracketMathBlock) {
+    normalized.push("\\[");
+    normalized.push(...bracketMathBuffer);
+  }
+  return normalized.join("\n");
+}
+var MATH_MARKDOWN_RULES_APPENDIX = `Math formatting rules (must follow):
+- Inline math: use single-dollar delimiters like $...$.
+- Display math: use $$ delimiters on their own lines with nothing else on those lines.
+- Do not use \\(...\\) or \\[...\\] delimiters.
+- Do not place display-math $$...$$ inside bullets or table cells; use inline $...$ there.
+- Escape non-math currency dollars as \\$.`;
+
+// src/markdown-renderer.tsx
 import { jsx } from "react/jsx-runtime";
+var highlightCache = /* @__PURE__ */ new Map();
+var getCacheKey = (code, lang) => `${lang}:${code}`;
 function escapeHtml(text) {
   return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -287,12 +404,70 @@ var format = (text) => {
         const nextChar = i + 1 < text.length ? text[i + 1] : null;
         const prevChar = i > 0 ? text[i - 1] : null;
         if (nextChar !== "$" && prevChar !== "$" && prevChar !== "\\") {
-          if (nextChar && /[0-9]/.test(nextChar)) {
+          if (nextChar && /[a-zA-Z0-9]/.test(nextChar)) {
             currText = text[i] + currText;
             i--;
             continue;
           }
-          if (hasMatchingDelimiter(text, i, "$")) {
+          if (!nextChar || [
+            " ",
+            "	",
+            ".",
+            ",",
+            ")",
+            "]",
+            "}",
+            ";",
+            ":",
+            "!",
+            "?",
+            "-",
+            '"',
+            "'",
+            "%",
+            "\u2014",
+            // Chinese/fullwidth punctuation
+            "\uFF08",
+            // （
+            "\uFF09",
+            // ）
+            "\uFF0C",
+            // ，
+            "\u3002",
+            // 。
+            "\uFF1A",
+            // ：
+            "\uFF1B",
+            // ；
+            "\uFF01",
+            // ！
+            "\uFF1F",
+            // ？
+            "\u3001",
+            // 、
+            "\u300B",
+            // 》
+            "\u300A",
+            // 《
+            "\u201C",
+            // \u201c
+            "\u201D",
+            // \u201d
+            "\u2018",
+            // \u2018
+            "\u2019",
+            // \u2019
+            "\u3010",
+            // 【
+            "\u3011",
+            // 】
+            // Hindi/Devanagari punctuation
+            "\u0964",
+            // । (Devanagari Danda - full stop)
+            "\u0965"
+            // ॥ (Devanagari Double Danda)
+          ].includes(nextChar) || /[a-zA-Z]/.test(nextChar) || // Allow CJK characters (Chinese, Japanese, Korean) after $
+          /[\u4e00-\u9fff\u3400-\u4dbf\uac00-\ud7af\u3040-\u309f\u30a0-\u30ff]/.test(nextChar)) {
             if (currText) {
               parts.unshift(escapeHtml(currText));
               currText = "";
@@ -337,10 +512,54 @@ var getIndentLevel = (line) => {
   let indent = 0;
   for (let i = 0; i < line.length; i++) {
     if (line[i] === " ") indent++;
-    else if (line[i] === "	") indent += 4;
+    else if (line[i] === "	")
+      indent += 4;
     else break;
   }
   return indent;
+};
+var isTableSeparatorRow = (line) => {
+  const trimmed = line.trim();
+  if (!trimmed.includes("|")) return false;
+  const cells = trimmed.split("|").map((cell) => cell.trim()).filter((cell) => cell.length > 0);
+  if (cells.length === 0) return false;
+  return cells.every((cell) => /^:?-{3,}:?$/.test(cell));
+};
+var splitTableRow = (line) => {
+  let row = line.trim();
+  if (row.startsWith("|")) row = row.slice(1);
+  if (row.endsWith("|")) row = row.slice(0, -1);
+  return row.split("|").map((cell) => cell.trim());
+};
+var renderTableBlock = (rows) => {
+  if (rows.length < 2) return rows.map((line) => `<p>${format(line.trim())}</p>`).join("");
+  const headerCells = splitTableRow(rows[0] || "");
+  const separatorCells = splitTableRow(rows[1] || "");
+  const bodyRows = rows.slice(2);
+  if (headerCells.length === 0 || separatorCells.length === 0) {
+    return rows.map((line) => `<p>${format(line.trim())}</p>`).join("");
+  }
+  const alignments = separatorCells.map((cell) => {
+    const startsWithColon = cell.startsWith(":");
+    const endsWithColon = cell.endsWith(":");
+    if (startsWithColon && endsWithColon) return "center";
+    if (endsWithColon) return "right";
+    return "left";
+  });
+  const cellBorder = "border:1px solid var(--color-paper-200);padding:0.5rem 0.75rem;";
+  const headerHtml = headerCells.map((cell, index) => {
+    const alignment = alignments[index] || "left";
+    return `<th style="${cellBorder}text-align:${alignment};font-weight:600">${format(cell)}</th>`;
+  }).join("");
+  const bodyHtml = bodyRows.filter((row) => row.trim().includes("|")).map((row) => {
+    const cells = splitTableRow(row);
+    const cellHtml = cells.map((cell, index) => {
+      const alignment = alignments[index] || "left";
+      return `<td style="${cellBorder}text-align:${alignment};vertical-align:top">${format(cell)}</td>`;
+    }).join("");
+    return `<tr>${cellHtml}</tr>`;
+  }).join("");
+  return `<div style="margin:1rem 0;overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.875rem"><thead><tr>${headerHtml}</tr></thead><tbody>${bodyHtml}</tbody></table></div>`;
 };
 var parseListItems = (lines, startIndex, baseIndent, listType, depth = 0) => {
   const items = [];
@@ -462,7 +681,8 @@ var parseListItems = (lines, startIndex, baseIndent, listType, depth = 0) => {
   };
 };
 function renderMarkdownToHtml(markdown, options) {
-  const lines = markdown.split("\n");
+  const normalizedMarkdown = normalizeMathMarkdownDelimiters(markdown);
+  const lines = normalizedMarkdown.split("\n");
   const parts = [];
   let i = 0;
   let codeBlockIndex = 0;
@@ -567,7 +787,13 @@ function renderMarkdownToHtml(markdown, options) {
             );
           } else {
             parts.push(
-              `<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm"><code class="language-${escapedLang}">${escapedCode}</code></pre>`
+              `<div class="code-block-wrapper relative group">
+              <button class="copy-btn absolute top-2 right-2 p-1.5 rounded bg-paper-200 hover:bg-paper-300 dark:bg-oxford-700 dark:hover:bg-oxford-600 opacity-0 group-hover:opacity-100 transition-opacity" data-code="${escapeHtml(codeContent)}" title="Copy code">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="copy-icon"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="check-icon hidden text-green-600"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+              <pre data-lang="${escapeHtml(language || "text")}" data-code="${escapeHtml(codeContent)}"><code class="language-${escapeHtml(language || "text")}">${escapedCode}</code></pre>
+            </div>`
             );
           }
           i++;
@@ -590,6 +816,36 @@ function renderMarkdownToHtml(markdown, options) {
       i++;
       continue;
     }
+    const nextNonEmptyIndex = (() => {
+      let j = i + 1;
+      while (j < lines.length && !(lines[j] || "").trim()) {
+        j++;
+      }
+      return j;
+    })();
+    if (trimmed.includes("|") && nextNonEmptyIndex < lines.length && isTableSeparatorRow((lines[nextNonEmptyIndex] || "").trim())) {
+      const tableLines = [trimmed];
+      tableLines.push((lines[nextNonEmptyIndex] || "").trim());
+      i = nextNonEmptyIndex + 1;
+      while (i < lines.length) {
+        const candidate = (lines[i] || "").trim();
+        if (!candidate) {
+          const lookahead = i + 1;
+          if (lookahead < lines.length && (lines[lookahead] || "").trim().includes("|")) {
+            i++;
+            continue;
+          }
+          break;
+        }
+        if (!candidate.includes("|")) {
+          break;
+        }
+        tableLines.push(candidate);
+        i++;
+      }
+      parts.push(renderTableBlock(tableLines));
+      continue;
+    }
     const content = format(trimmed);
     parts.push(`<p>${content}</p>`);
     i++;
@@ -604,14 +860,74 @@ var MarkdownRenderer = ({
   const containerRef = useRef(null);
   const onRunCodeRef = useRef(onRunCode);
   onRunCodeRef.current = onRunCode;
+  const [html, setHtml] = React.useState("");
   const hasRunCode = !!onRunCode;
-  const html = React.useMemo(
-    () => renderMarkdownToHtml(
+  React.useEffect(() => {
+    const rendered = renderMarkdownToHtml(
       markdown,
       hasRunCode ? { executableLanguages } : void 0
-    ),
-    [markdown, hasRunCode, executableLanguages]
-  );
+    );
+    setHtml(rendered);
+  }, [markdown, hasRunCode, executableLanguages]);
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const highlightCodeBlocks = async () => {
+      const codeBlocks = containerRef.current?.querySelectorAll("pre[data-lang]");
+      if (!codeBlocks) return;
+      for (const block of Array.from(codeBlocks)) {
+        const preElement = block;
+        const lang = preElement.getAttribute("data-lang") || "plaintext";
+        const code = preElement.getAttribute("data-code") || "";
+        const effectiveLang = lang === "text" || lang === "" ? "plaintext" : lang;
+        const cacheKey = getCacheKey(code, effectiveLang);
+        let highlighted = highlightCache.get(cacheKey);
+        if (!highlighted) {
+          try {
+            highlighted = await codeToHtml(code, {
+              lang: effectiveLang,
+              theme: "github-light"
+            });
+            highlightCache.set(cacheKey, highlighted);
+          } catch (error) {
+            console.warn(`Failed to highlight code block with language '${effectiveLang}':`, error);
+            preElement.classList.add("code-plain");
+            continue;
+          }
+        }
+        const tempDiv = document.createElement("div");
+        tempDiv.innerHTML = highlighted;
+        const newPre = tempDiv.firstElementChild;
+        if (newPre) {
+          preElement.replaceWith(newPre);
+        }
+      }
+    };
+    const copyButtons = containerRef.current.querySelectorAll(".copy-btn");
+    copyButtons.forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const button = btn;
+        const code = button.getAttribute("data-code") || "";
+        try {
+          await navigator.clipboard.writeText(code);
+          const copyIcon = button.querySelector(".copy-icon");
+          const checkIcon = button.querySelector(".check-icon");
+          if (copyIcon && checkIcon) {
+            copyIcon.classList.add("hidden");
+            checkIcon.classList.remove("hidden");
+            setTimeout(() => {
+              copyIcon.classList.remove("hidden");
+              checkIcon.classList.add("hidden");
+            }, 2e3);
+          }
+        } catch (err) {
+          console.error("Failed to copy code:", err);
+        }
+      });
+    });
+    highlightCodeBlocks();
+  }, [html]);
   const handleRun = useCallback(
     async (button, block) => {
       const codeEl = block.querySelector("code[data-executable]");
@@ -687,6 +1003,8 @@ var MarkdownRenderer = ({
 };
 var markdown_renderer_default = MarkdownRenderer;
 export {
+  MATH_MARKDOWN_RULES_APPENDIX,
   markdown_renderer_default as MarkdownRenderer,
+  normalizeMathMarkdownDelimiters,
   renderMarkdownToHtml
 };
