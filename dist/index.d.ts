@@ -7,13 +7,14 @@ interface CodeExecutionResult {
 }
 interface MarkdownRendererProps {
     markdown: string;
+    className?: string;
     onRunCode?: (code: string, language: string) => Promise<CodeExecutionResult>;
     executableLanguages?: string[];
 }
 declare function renderMarkdownToHtml(markdown: string, options?: {
     executableLanguages?: string[];
 }): string;
-declare const MarkdownRenderer: ({ markdown, onRunCode, executableLanguages, }: MarkdownRendererProps) => react_jsx_runtime.JSX.Element;
+declare const MarkdownRenderer: ({ markdown, className, onRunCode, executableLanguages, }: MarkdownRendererProps) => react_jsx_runtime.JSX.Element;
 
 declare function normalizeMathMarkdownDelimiters(markdown: string): string;
 declare const MATH_MARKDOWN_RULES_APPENDIX = "Math formatting rules (must follow):\n- Inline math: use single-dollar delimiters like $...$.\n- Display math: use $$ delimiters on their own lines with nothing else on those lines.\n- Do not use \\(...\\) or \\[...\\] delimiters.\n- Do not place display-math $$...$$ inside bullets or table cells; use inline $...$ there.\n- Escape non-math currency dollars as \\$.";

@@ -1,6 +1,6 @@
 {
   "name": "@affanhamid/markdown-renderer",
-  "version": "2.0.1",
+  "version": "2.3.1",
   "description": "Custom markdown renderer with KaTeX support",
   "type": "module",
   "main": "dist/index.cjs",
@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts --external react",
+    "build": "tsup src/index.ts --format cjs,esm --dts --external react --external mermaid",
     "test": "jest"
   },
   "dependencies": {
@@ -22,13 +22,20 @@
     "shiki": "^4.0.1"
   },
   "peerDependencies": {
-    "react": ">=18"
+    "react": ">=18",
+    "mermaid": ">=10"
+  },
+  "peerDependenciesMeta": {
+    "mermaid": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
     "@types/katex": "^0.16.7",
     "@types/react": "^19.0.0",
     "jest": "^30.2.0",
+    "mermaid": "^11.12.3",
     "ts-jest": "^29.4.6",
     "tsup": "^8.0.0",
     "typescript": "^5.8.0"

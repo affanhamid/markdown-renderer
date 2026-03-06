@@ -820,6 +820,13 @@ function renderMarkdownToHtml(markdown, options) {
           const isExecutable = options?.executableLanguages && language && options.executableLanguages.includes(language.toLowerCase());
           const currentIndex = codeBlockIndex;
           codeBlockIndex++;
+          if (language === "mermaid") {
+            parts.push(
+              `<div class="md-mermaid" data-mermaid-code="${escapeHtml(codeContent)}"><pre style="overflow-x:auto;background:#f7f7f7;padding:0.75rem;border-radius:0.375rem;font-size:0.8rem;color:#666"><code>${escapedCode}</code></pre></div>`
+            );
+            i++;
+            break;
+          }
           if (isExecutable) {
             parts.push(
               `<div class="md-code-block" data-language="${escapedLang}" data-code-index="${currentIndex}" data-executable="true"><div class="md-code-block-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none"><span style="font-size:0.75rem;color:#666;font-family:monospace">${escapedLang}</span><button class="md-run-btn" data-code-index="${currentIndex}" style="padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit">Run</button></div><pre style="overflow-x:auto;border-radius:0 0 0.375rem 0.375rem;background:#f7f7f7;color:#1f2937;padding:0.75rem;font-size:0.875rem;margin:0;border:1px solid #e0e0e0;border-top:none"><code class="language-${escapedLang}" data-executable="true">${escapedCode}</code></pre><div class="md-code-output" data-output-for="${currentIndex}" style="display:none"></div></div>`
@@ -845,6 +852,28 @@ function renderMarkdownToHtml(markdown, options) {
     } else if (trimmed === "---") {
       parts.push("<hr />");
       i++;
+      continue;
+    }
+    const calloutMatch = trimmed.match(/^\\begin\{callout\}\{(\w+)\}$/);
+    if (calloutMatch && calloutMatch[1]) {
+      const color = calloutMatch[1];
+      const contentLines = [];
+      i++;
+      while (i < lines.length) {
+        const calloutLine = (lines[i] || "").trim();
+        if (calloutLine === "\\end{callout}") {
+          i++;
+          break;
+        }
+        contentLines.push(lines[i] || "");
+        i++;
+      }
+      const innerHtml = renderMarkdownToHtml(contentLines.join("\n"), options);
+      const innerMatch = innerHtml.match(/<div class="prose[^"]*">(.*)<\/div>/s);
+      const innerContent = innerMatch?.[1] ?? escapeHtml(contentLines.join("\n"));
+      parts.push(
+        `<div class="md-callout border-${color}-200 bg-${color}-50 text-${color}-900 dark:border-${color}-700/40 dark:bg-${color}-900/10 dark:text-${color}-200 my-4 rounded-lg border px-4 py-3 text-sm leading-relaxed [&>p]:mb-0 [&>p:last-child]:mb-0">${innerContent}</div>`
+      );
       continue;
     }
     const imageMatch = trimmed.match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
@@ -893,6 +922,7 @@ function renderMarkdownToHtml(markdown, options) {
 }
 var MarkdownRenderer = ({
   markdown,
+  className,
   onRunCode,
   executableLanguages = ["python", "r"]
 }) => {
@@ -1038,7 +1068,43 @@ var MarkdownRenderer = ({
       );
     };
   }, [html, handleRun]);
-  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: containerRef, dangerouslySetInnerHTML: { __html: html } });
+  (0, import_react.useEffect)(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const mermaidBlocks = container.querySelectorAll(".md-mermaid");
+    if (mermaidBlocks.length === 0) return;
+    let alive = true;
+    void (async () => {
+      try {
+        const mermaid = (await import("mermaid")).default;
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "antiscript",
+          theme: "neutral",
+          fontFamily: "ui-sans-serif, system-ui, sans-serif",
+          fontSize: 13,
+          htmlLabels: false,
+          flowchart: { useMaxWidth: true, htmlLabels: false },
+          sequence: { useMaxWidth: true }
+        });
+        for (const block of Array.from(mermaidBlocks)) {
+          if (!alive) break;
+          const code = block.getAttribute("data-mermaid-code") || "";
+          const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
+          try {
+            const { svg } = await mermaid.render(id, code.trim());
+            block.innerHTML = `<div style="display:flex;justify-content:center;overflow:auto;padding:1rem">${svg}</div>`;
+          } catch {
+          }
+        }
+      } catch {
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [html]);
+  return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: containerRef, className, dangerouslySetInnerHTML: { __html: html } });
 };
 var markdown_renderer_default = MarkdownRenderer;
 // Annotate the CommonJS export names for ESM import in node:

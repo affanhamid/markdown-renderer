@@ -18,6 +18,7 @@ export interface CodeExecutionResult {
 
 export interface MarkdownRendererProps {
   markdown: string;
+  className?: string;
   onRunCode?: (code: string, language: string) => Promise<CodeExecutionResult>;
   executableLanguages?: string[];
 }
@@ -857,6 +858,16 @@ function renderMarkdownToHtml(
           const currentIndex = codeBlockIndex;
           codeBlockIndex++;
 
+          if (language === "mermaid") {
+            parts.push(
+              `<div class="md-mermaid" data-mermaid-code="${escapeHtml(codeContent)}">`+
+                `<pre style="overflow-x:auto;background:#f7f7f7;padding:0.75rem;border-radius:0.375rem;font-size:0.8rem;color:#666"><code>${escapedCode}</code></pre>` +
+              `</div>`,
+            );
+            i++;
+            break;
+          }
+
           if (isExecutable) {
             parts.push(
               `<div class="md-code-block" data-language="${escapedLang}" data-code-index="${currentIndex}" data-executable="true">` +
@@ -892,6 +903,33 @@ function renderMarkdownToHtml(
     } else if (trimmed === "---") {
       parts.push("<hr />");
       i++;
+      continue;
+    }
+
+    // Callout block: \begin{callout}{color}...\end{callout}
+    const calloutMatch = trimmed.match(/^\\begin\{callout\}\{(\w+)\}$/);
+    if (calloutMatch && calloutMatch[1]) {
+      const color = calloutMatch[1];
+      const contentLines: string[] = [];
+      i++;
+
+      while (i < lines.length) {
+        const calloutLine = (lines[i] || "").trim();
+        if (calloutLine === "\\end{callout}") {
+          i++;
+          break;
+        }
+        contentLines.push(lines[i] || "");
+        i++;
+      }
+
+      const innerHtml = renderMarkdownToHtml(contentLines.join("\n"), options);
+      const innerMatch = innerHtml.match(/<div class="prose[^"]*">(.*)<\/div>/s);
+      const innerContent = innerMatch?.[1] ?? escapeHtml(contentLines.join("\n"));
+
+      parts.push(
+        `<div class="md-callout border-${color}-200 bg-${color}-50 text-${color}-900 dark:border-${color}-700/40 dark:bg-${color}-900/10 dark:text-${color}-200 my-4 rounded-lg border px-4 py-3 text-sm leading-relaxed [&>p]:mb-0 [&>p:last-child]:mb-0">${innerContent}</div>`,
+      );
       continue;
     }
 
@@ -954,6 +992,7 @@ function renderMarkdownToHtml(
 
 const MarkdownRenderer = ({
   markdown,
+  className,
   onRunCode,
   executableLanguages = ["python", "r"],
 }: MarkdownRendererProps) => {
@@ -1137,7 +1176,50 @@ const MarkdownRenderer = ({
     };
   }, [html, handleRun]);
 
-  return <div ref={containerRef} dangerouslySetInnerHTML={{ __html: html }} />;
+  // Mermaid diagram hydration
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const mermaidBlocks = container.querySelectorAll<HTMLElement>(".md-mermaid");
+    if (mermaidBlocks.length === 0) return;
+
+    let alive = true;
+
+    void (async () => {
+      try {
+        const mermaid = (await import("mermaid")).default;
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "antiscript",
+          theme: "neutral",
+          fontFamily: "ui-sans-serif, system-ui, sans-serif",
+          fontSize: 13,
+          htmlLabels: false,
+          flowchart: { useMaxWidth: true, htmlLabels: false },
+          sequence: { useMaxWidth: true },
+        });
+
+        for (const block of Array.from(mermaidBlocks)) {
+          if (!alive) break;
+          const code = block.getAttribute("data-mermaid-code") || "";
+          const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
+          try {
+            const { svg } = await mermaid.render(id, code.trim());
+            block.innerHTML = `<div style="display:flex;justify-content:center;overflow:auto;padding:1rem">${svg}</div>`;
+          } catch {
+            // Leave the fallback <pre> in place
+          }
+        }
+      } catch {
+        // mermaid not installed — leave fallback code blocks
+      }
+    })();
+
+    return () => { alive = false; };
+  }, [html]);
+
+  return <div ref={containerRef} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 };
 
 export default MarkdownRenderer;
