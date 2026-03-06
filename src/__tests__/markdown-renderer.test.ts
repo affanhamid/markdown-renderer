@@ -342,6 +342,56 @@ $$`;
     });
   });
 
+  describe("LaTeX delimiter normalization", () => {
+    test("normalizes \\(...\\) delimiters", () => {
+      const result = renderMarkdownToHtml("The value is \\(x^2 + 1\\).");
+      expect(result).toContain("katex");
+      expect(result).toContain("The value is");
+    });
+
+    test("normalizes \\[...\\] block delimiters", () => {
+      const result = renderMarkdownToHtml("\\[x^2 + y^2 = z^2\\]");
+      expect(result).toContain("katex-display");
+    });
+
+    test("normalizes inline $$...$$ inside sentence", () => {
+      const result = renderMarkdownToHtml("Use $$x = y + 1$$ in this step.");
+      expect(result).toContain("katex");
+      expect(result).toContain("in this step");
+    });
+  });
+
+  describe("Mixed inline code and LaTeX", () => {
+    test("renders inline code followed by LaTeX with text and ampersand", () => {
+      const input =
+        "After a regression, type `test x1 x2`. This tests the joint null $H_0: \\beta_1 = 0 \\text{ & } \\beta_2 = 0$.";
+      const result = renderMarkdownToHtml(input);
+
+      // Should contain the inline code
+      expect(result).toContain("<code>test x1 x2</code>");
+
+      // Should contain KaTeX rendered math (not error)
+      expect(result).toContain("katex");
+      expect(result).not.toContain("katex-error");
+
+      // Should preserve the surrounding text
+      expect(result).toContain("After a regression, type");
+      expect(result).toContain("This tests the joint null");
+
+      // The period at the end should be preserved
+      expect(result).toMatch(/\.<\/p>/);
+    });
+
+    test("escapes ampersand inside \\text{} for KaTeX", () => {
+      const input = "$\\text{A & B}$";
+      const result = renderMarkdownToHtml(input);
+
+      // Should render without KaTeX error
+      expect(result).toContain("katex");
+      expect(result).not.toContain("katex-error");
+    });
+  });
+
   describe("Math with brackets (left/right)", () => {
     test("should add left/right for parentheses - feature needs implementation", () => {
       const input = "Calculate ($x + y$).";
@@ -496,7 +546,7 @@ $$`;
       const input = "```javascript\nconst x = 5;\n```";
       const output = renderMarkdownToHtml(input);
       expect(output).toContain("<pre");
-      expect(output).toContain("language-javascript");
+      expect(output).toContain('data-lang="javascript"');
       expect(output).toContain("const x = 5;");
     });
 
@@ -735,6 +785,133 @@ $$`;
     });
   });
 
+  describe("Tables", () => {
+    test("should render a basic table", () => {
+      const input = "| Name | Age |\n| --- | --- |\n| Alice | 30 |\n| Bob | 25 |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("<table");
+      expect(output).toContain("<thead>");
+      expect(output).toContain("<tbody>");
+      expect(output).toContain("<th");
+      expect(output).toContain("Name");
+      expect(output).toContain("Age");
+      expect(output).toContain("<td");
+      expect(output).toContain("Alice");
+      expect(output).toContain("30");
+      expect(output).toContain("Bob");
+      expect(output).toContain("25");
+    });
+
+    test("should render table with left alignment", () => {
+      const input = "| Col |\n| :--- |\n| val |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("text-align:left");
+    });
+
+    test("should render table with right alignment", () => {
+      const input = "| Col |\n| ---: |\n| val |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("text-align:right");
+    });
+
+    test("should render table with center alignment", () => {
+      const input = "| Col |\n| :---: |\n| val |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("text-align:center");
+    });
+
+    test("should render table with mixed alignments", () => {
+      const input = "| Left | Center | Right |\n| :--- | :---: | ---: |\n| a | b | c |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("text-align:left");
+      expect(output).toContain("text-align:center");
+      expect(output).toContain("text-align:right");
+    });
+
+    test("should render table with inline formatting", () => {
+      const input = "| Header |\n| --- |\n| **bold** and *italic* |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("<table");
+      expect(output).toContain("<strong>bold</strong>");
+      expect(output).toContain("<em>italic</em>");
+    });
+
+    test("should render table with inline math", () => {
+      const input = "| Formula | Result |\n| --- | --- |\n| $x + y$ | $z$ |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("<table");
+      expect(output).toContain("katex");
+    });
+
+    test("should render table without leading pipes", () => {
+      const input = "Name | Age\n--- | ---\nAlice | 30";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("<table");
+      expect(output).toContain("Alice");
+      expect(output).toContain("30");
+    });
+
+    test("should render table with many columns", () => {
+      const input = "| A | B | C | D |\n| --- | --- | --- | --- |\n| 1 | 2 | 3 | 4 |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("<table");
+      expect(output).toContain("A");
+      expect(output).toContain("D");
+      expect(output).toContain("1");
+      expect(output).toContain("4");
+    });
+
+    test("should render table with multiple body rows", () => {
+      const input = "| X |\n| --- |\n| a |\n| b |\n| c |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("<table");
+      const trMatches = output.match(/<tr>/g);
+      // 1 header row + 3 body rows = 4 <tr> tags
+      expect(trMatches).toHaveLength(4);
+    });
+
+    test("should render table with empty cells", () => {
+      const input = "| A | B |\n| --- | --- |\n| val |  |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("<table");
+      expect(output).toContain("val");
+    });
+
+    test("should not treat a single pipe line as a table", () => {
+      const input = "This has a | pipe character";
+      const output = renderMarkdownToHtml(input);
+      expect(output).not.toContain("<table");
+      expect(output).toContain("pipe character");
+    });
+
+    test("should render table wrapped in overflow div", () => {
+      const input = "| A |\n| --- |\n| B |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("overflow-x:auto");
+    });
+
+    test("should render table between other content", () => {
+      const input = "Paragraph before.\n\n| H |\n| --- |\n| V |\n\nParagraph after.";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("<p>Paragraph before.</p>");
+      expect(output).toContain("<table");
+      expect(output).toContain("<p>Paragraph after.</p>");
+    });
+
+    test("should render table with inline code in cells", () => {
+      const input = "| Code |\n| --- |\n| `hello` |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("<table");
+      expect(output).toContain("<code>hello</code>");
+    });
+
+    test("should fallback to paragraphs for rows without separator", () => {
+      const input = "| not a table |";
+      const output = renderMarkdownToHtml(input);
+      expect(output).not.toContain("<table");
+    });
+  });
+
   describe("Complex scenarios", () => {
     test("should not indent headings after list items", () => {
       const input = `Concepts & Techniques:
@@ -885,7 +1062,8 @@ describe("Executable code blocks", () => {
       expect(output).not.toContain("data-executable");
       expect(output).not.toContain("md-code-block");
       expect(output).not.toContain("md-code-output");
-      expect(output).toContain('<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm">');
+      expect(output).toContain("code-block-wrapper");
+      expect(output).toContain('data-lang="python"');
       expect(output).toContain('class="language-python"');
     });
 
@@ -903,7 +1081,8 @@ describe("Executable code blocks", () => {
       const output = renderMarkdownToHtml(input, execOptions);
       expect(output).not.toContain("data-executable");
       expect(output).not.toContain("md-code-block");
-      expect(output).toContain('<pre class="overflow-x-auto rounded bg-gray-100 p-3 text-sm">');
+      expect(output).toContain("code-block-wrapper");
+      expect(output).toContain('data-lang="javascript"');
     });
 
     test("should not wrap code block without language", () => {
@@ -929,11 +1108,12 @@ describe("Executable code blocks", () => {
       const execWrappers = output.match(/class="md-code-block"/g);
       expect(execWrappers).toHaveLength(2);
 
-      // JavaScript should use the standard pre/code
+      // JavaScript should use the standard pre/code with data-lang
       expect(output).toContain('class="language-javascript"');
       // The JS block should NOT have data-executable on its code element
+      expect(output).toContain("code-block-wrapper");
       const jsSection = output.match(
-        /<pre class="overflow-x-auto rounded[^"]*">\s*<code class="language-javascript">/,
+        /<pre data-lang="javascript"[^>]*>\s*<code class="language-javascript">/,
       );
       expect(jsSection).toBeTruthy();
     });
