@@ -990,6 +990,9 @@ function renderMarkdownToHtml(
   return `<div class="prose max-w-none">${parts.join("")}</div>`;
 }
 
+// Module-level mermaid instance — initialized once across all renders
+let mermaidInstance: Awaited<typeof import("mermaid")>["default"] | null = null;
+
 const MarkdownRenderer = ({
   markdown,
   className,
@@ -1177,49 +1180,43 @@ const MarkdownRenderer = ({
   }, [html, handleRun]);
 
   // Mermaid diagram hydration
-  // Initialize mermaid once, then re-render blocks whenever html changes
-  const mermaidReady = useRef<Promise<typeof import("mermaid")["default"]> | null>(null);
-
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
-    const mermaidBlocks = container.querySelectorAll<HTMLElement>(".md-mermaid");
-    if (mermaidBlocks.length === 0) return;
-
     let alive = true;
+    let timerId: ReturnType<typeof setTimeout>;
 
-    // Initialize mermaid once and cache the promise
-    if (!mermaidReady.current) {
-      mermaidReady.current = import("mermaid").then((mod) => {
-        const mermaid = mod.default;
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: "antiscript",
-          theme: "neutral",
-          fontFamily: "ui-sans-serif, system-ui, sans-serif",
-          fontSize: 13,
-          htmlLabels: false,
-          flowchart: { useMaxWidth: true, htmlLabels: false },
-          sequence: { useMaxWidth: true },
-        });
-        return mermaid;
-      });
-    }
+    const renderMermaid = async () => {
+      // Re-query blocks after the timeout to ensure DOM is settled
+      const blocks = container.querySelectorAll<HTMLElement>(".md-mermaid");
+      if (blocks.length === 0 || !alive) return;
 
-    void (async () => {
       try {
-        const mermaid = await mermaidReady.current!;
+        if (!mermaidInstance) {
+          const mod = await import("mermaid");
+          mermaidInstance = mod.default;
+          mermaidInstance.initialize({
+            startOnLoad: false,
+            securityLevel: "antiscript",
+            theme: "neutral",
+            fontFamily: "ui-sans-serif, system-ui, sans-serif",
+            fontSize: 13,
+            htmlLabels: false,
+            flowchart: { useMaxWidth: true, htmlLabels: false },
+            sequence: { useMaxWidth: true },
+          });
+        }
+
         if (!alive) return;
 
-        for (const block of Array.from(mermaidBlocks)) {
+        for (const block of Array.from(blocks)) {
           if (!alive) break;
-          // Skip already-rendered blocks
           if (block.querySelector("svg")) continue;
           const code = block.getAttribute("data-mermaid-code") || "";
           const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
           try {
-            const { svg } = await mermaid.render(id, code.trim());
+            const { svg } = await mermaidInstance.render(id, code.trim());
             if (alive) {
               block.innerHTML = `<div style="display:flex;justify-content:center;overflow:auto;padding:1rem">${svg}</div>`;
             }
@@ -1230,9 +1227,15 @@ const MarkdownRenderer = ({
       } catch {
         // mermaid not installed — leave fallback code blocks
       }
-    })();
+    };
 
-    return () => { alive = false; };
+    // Defer to next tick so the browser has fully committed the DOM update
+    timerId = setTimeout(renderMermaid, 0);
+
+    return () => {
+      alive = false;
+      clearTimeout(timerId);
+    };
   }, [html]);
 
   return <div ref={containerRef} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
