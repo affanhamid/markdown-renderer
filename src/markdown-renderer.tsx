@@ -1180,15 +1180,15 @@ const MarkdownRenderer = ({
   }, [html, handleRun]);
 
   // Mermaid diagram hydration
+  // html is set via setHtml (async), so we use a MutationObserver to detect
+  // when .md-mermaid blocks actually appear in the DOM, then render them.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
 
     let alive = true;
-    let timerId: ReturnType<typeof setTimeout>;
 
-    const renderMermaid = async () => {
-      // Re-query blocks after the timeout to ensure DOM is settled
+    const renderBlocks = async () => {
       const blocks = container.querySelectorAll<HTMLElement>(".md-mermaid");
       if (blocks.length === 0 || !alive) return;
 
@@ -1229,14 +1229,25 @@ const MarkdownRenderer = ({
       }
     };
 
-    // Defer to next tick so the browser has fully committed the DOM update
-    timerId = setTimeout(renderMermaid, 0);
+    // Render any blocks already in the DOM
+    void renderBlocks();
+
+    // Watch for new .md-mermaid blocks appearing (e.g. after dangerouslySetInnerHTML updates)
+    const observer = new MutationObserver(() => {
+      if (!alive) return;
+      const blocks = container.querySelectorAll<HTMLElement>(".md-mermaid:not(:has(svg))");
+      if (blocks.length > 0) {
+        void renderBlocks();
+      }
+    });
+
+    observer.observe(container, { childList: true, subtree: true });
 
     return () => {
       alive = false;
-      clearTimeout(timerId);
+      observer.disconnect();
     };
-  }, [html]);
+  }, []);
 
   return <div ref={containerRef} className={className} dangerouslySetInnerHTML={{ __html: html }} />;
 };

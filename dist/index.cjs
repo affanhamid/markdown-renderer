@@ -1073,8 +1073,7 @@ var MarkdownRenderer = ({
     const container = containerRef.current;
     if (!container) return;
     let alive = true;
-    let timerId;
-    const renderMermaid = async () => {
+    const renderBlocks = async () => {
       const blocks = container.querySelectorAll(".md-mermaid");
       if (blocks.length === 0 || !alive) return;
       try {
@@ -1109,12 +1108,20 @@ var MarkdownRenderer = ({
       } catch {
       }
     };
-    timerId = setTimeout(renderMermaid, 0);
+    void renderBlocks();
+    const observer = new MutationObserver(() => {
+      if (!alive) return;
+      const blocks = container.querySelectorAll(".md-mermaid:not(:has(svg))");
+      if (blocks.length > 0) {
+        void renderBlocks();
+      }
+    });
+    observer.observe(container, { childList: true, subtree: true });
     return () => {
       alive = false;
-      clearTimeout(timerId);
+      observer.disconnect();
     };
-  }, [html]);
+  }, []);
   return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", { ref: containerRef, className, dangerouslySetInnerHTML: { __html: html } });
 };
 var markdown_renderer_default = MarkdownRenderer;
