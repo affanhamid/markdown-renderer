@@ -1029,46 +1029,51 @@ var MarkdownRenderer = ({
       );
     };
   }, [html, handleRun]);
+  const mermaidReady = useRef(null);
   useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const mermaidBlocks = container.querySelectorAll(".md-mermaid");
+    if (mermaidBlocks.length === 0) return;
     let alive = true;
-    const rafId = requestAnimationFrame(() => {
-      const container = containerRef.current;
-      if (!container || !alive) return;
-      const mermaidBlocks = container.querySelectorAll(".md-mermaid");
-      if (mermaidBlocks.length === 0) return;
-      void (async () => {
-        try {
-          const mermaid = (await import("mermaid")).default;
-          if (!alive) return;
-          mermaid.initialize({
-            startOnLoad: false,
-            securityLevel: "antiscript",
-            theme: "neutral",
-            fontFamily: "ui-sans-serif, system-ui, sans-serif",
-            fontSize: 13,
-            htmlLabels: false,
-            flowchart: { useMaxWidth: true, htmlLabels: false },
-            sequence: { useMaxWidth: true }
-          });
-          for (const block of Array.from(mermaidBlocks)) {
-            if (!alive) break;
-            const code = block.getAttribute("data-mermaid-code") || "";
-            const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
-            try {
-              const { svg } = await mermaid.render(id, code.trim());
-              if (alive) {
-                block.innerHTML = `<div style="display:flex;justify-content:center;overflow:auto;padding:1rem">${svg}</div>`;
-              }
-            } catch {
+    if (!mermaidReady.current) {
+      mermaidReady.current = import("mermaid").then((mod) => {
+        const mermaid = mod.default;
+        mermaid.initialize({
+          startOnLoad: false,
+          securityLevel: "antiscript",
+          theme: "neutral",
+          fontFamily: "ui-sans-serif, system-ui, sans-serif",
+          fontSize: 13,
+          htmlLabels: false,
+          flowchart: { useMaxWidth: true, htmlLabels: false },
+          sequence: { useMaxWidth: true }
+        });
+        return mermaid;
+      });
+    }
+    void (async () => {
+      try {
+        const mermaid = await mermaidReady.current;
+        if (!alive) return;
+        for (const block of Array.from(mermaidBlocks)) {
+          if (!alive) break;
+          if (block.querySelector("svg")) continue;
+          const code = block.getAttribute("data-mermaid-code") || "";
+          const id = `mermaid-${Math.random().toString(36).slice(2, 9)}`;
+          try {
+            const { svg } = await mermaid.render(id, code.trim());
+            if (alive) {
+              block.innerHTML = `<div style="display:flex;justify-content:center;overflow:auto;padding:1rem">${svg}</div>`;
             }
+          } catch {
           }
-        } catch {
         }
-      })();
-    });
+      } catch {
+      }
+    })();
     return () => {
       alive = false;
-      cancelAnimationFrame(rafId);
     };
   }, [html]);
   return /* @__PURE__ */ jsx("div", { ref: containerRef, className, dangerouslySetInnerHTML: { __html: html } });
