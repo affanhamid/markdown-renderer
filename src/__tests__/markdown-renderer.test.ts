@@ -1171,3 +1171,55 @@ describe("Executable code blocks", () => {
     });
   });
 });
+
+describe("Links", () => {
+  test("should render a basic link", () => {
+    const input = "[click here](https://example.com)";
+    const output = renderMarkdownToHtml(input);
+    expect(output).toContain('<a href="https://example.com">click here</a>');
+  });
+
+  test("should render a link within a paragraph", () => {
+    const input = "Visit [our site](https://example.com) for more info.";
+    const output = renderMarkdownToHtml(input);
+    expect(output).toContain('<a href="https://example.com">our site</a>');
+    expect(output).toContain("Visit");
+    expect(output).toContain("for more info.");
+  });
+
+  test("should render multiple links in one line", () => {
+    const input = "[one](https://one.com) and [two](https://two.com)";
+    const output = renderMarkdownToHtml(input);
+    expect(output).toContain('<a href="https://one.com">one</a>');
+    expect(output).toContain('<a href="https://two.com">two</a>');
+  });
+
+  test("should not confuse images with links", () => {
+    const input = "![alt](image.png) and [text](link.html)";
+    const output = renderMarkdownToHtml(input);
+    expect(output).toContain('<img src="image.png"');
+    expect(output).toContain('<a href="link.html">text</a>');
+  });
+
+  test("should escape HTML in link URL", () => {
+    const input = '[click](https://example.com/"bad)';
+    const output = renderMarkdownToHtml(input);
+    expect(output).toContain("&quot;");
+    expect(output).not.toContain('href="https://example.com/"bad"');
+  });
+
+  test("should render bold text inside a link", () => {
+    const input = "[**bold link**](https://example.com)";
+    const output = renderMarkdownToHtml(input);
+    expect(output).toContain("<strong>");
+    expect(output).toContain("bold link");
+    expect(output).toContain('href="https://example.com"');
+  });
+
+  test("should render a link in a list item", () => {
+    const input = "- See [docs](https://docs.example.com) for details";
+    const output = renderMarkdownToHtml(input);
+    expect(output).toContain('<a href="https://docs.example.com">docs</a>');
+    expect(output).toContain("<li>");
+  });
+});

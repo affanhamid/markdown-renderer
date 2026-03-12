@@ -121,6 +121,7 @@ function hasMatchingDelimiter(text: string, startIndex: number, delimiter: strin
 }
 
 const IMG_PLACEHOLDER = "\x01IMG";
+const LINK_PLACEHOLDER = "\x01LNK";
 
 const format = (text: string): string => {
   // Pre-process inline images: ![alt](url) -> placeholder
@@ -131,6 +132,16 @@ const format = (text: string): string => {
       `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" style="display:inline;max-width:100%;border-radius:0.25rem" />`,
     );
     return `${IMG_PLACEHOLDER}${idx}\x01`;
+  });
+
+  // Pre-process inline links: [text](url) -> placeholder (must run after image pre-pass)
+  const links: string[] = [];
+  text = text.replace(/(?<!!)\[([^\]]*)\]\(([^)]+)\)/g, (_, linkText: string, url: string) => {
+    const idx = links.length;
+    links.push(
+      `<a href="${escapeHtml(url)}">${format(linkText)}</a>`,
+    );
+    return `${LINK_PLACEHOLDER}${idx}\x01`;
   });
 
   let inLatex = false;
@@ -463,12 +474,18 @@ const format = (text: string): string => {
     parts.unshift(escapeHtml(currText));
   }
 
-  // Post-process: restore image placeholders
+  // Post-process: restore image and link placeholders
   let result = parts.join("");
   for (let idx = 0; idx < images.length; idx++) {
     result = result.replace(
       escapeHtml(`${IMG_PLACEHOLDER}${idx}\x01`),
       images[idx]!,
+    );
+  }
+  for (let idx = 0; idx < links.length; idx++) {
+    result = result.replace(
+      escapeHtml(`${LINK_PLACEHOLDER}${idx}\x01`),
+      links[idx]!,
     );
   }
   return result;

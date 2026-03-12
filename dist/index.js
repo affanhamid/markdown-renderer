@@ -188,6 +188,7 @@ function hasMatchingDelimiter(text, startIndex, delimiter) {
   return false;
 }
 var IMG_PLACEHOLDER = "IMG";
+var LINK_PLACEHOLDER = "LNK";
 var format = (text) => {
   const images = [];
   text = text.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
@@ -196,6 +197,14 @@ var format = (text) => {
       `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" style="display:inline;max-width:100%;border-radius:0.25rem" />`
     );
     return `${IMG_PLACEHOLDER}${idx}`;
+  });
+  const links = [];
+  text = text.replace(/(?<!!)\[([^\]]*)\]\(([^)]+)\)/g, (_, linkText, url) => {
+    const idx = links.length;
+    links.push(
+      `<a href="${escapeHtml(url)}">${format(linkText)}</a>`
+    );
+    return `${LINK_PLACEHOLDER}${idx}`;
   });
   let inLatex = false;
   let inBoldItalics = false;
@@ -504,6 +513,12 @@ var format = (text) => {
     result = result.replace(
       escapeHtml(`${IMG_PLACEHOLDER}${idx}`),
       images[idx]
+    );
+  }
+  for (let idx = 0; idx < links.length; idx++) {
+    result = result.replace(
+      escapeHtml(`${LINK_PLACEHOLDER}${idx}`),
+      links[idx]
     );
   }
   return result;
