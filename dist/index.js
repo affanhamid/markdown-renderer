@@ -908,6 +908,19 @@ var MarkdownRenderer = ({
   const onRunCodeRef = useRef(onRunCode);
   onRunCodeRef.current = onRunCode;
   const [html, setHtml] = React.useState("");
+  const [resolvedTheme, setResolvedTheme] = React.useState("github-light");
+  React.useEffect(() => {
+    if (codeTheme !== "auto") {
+      setResolvedTheme(codeTheme === "dark" ? "github-dark" : "github-light");
+      return;
+    }
+    const htmlEl = document.documentElement;
+    const update = () => setResolvedTheme(htmlEl.classList.contains("dark") ? "github-dark" : "github-light");
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(htmlEl, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [codeTheme]);
   const hasRunCode = !!onRunCode;
   React.useEffect(() => {
     const rendered = renderMarkdownToHtml(
@@ -918,12 +931,6 @@ var MarkdownRenderer = ({
   }, [markdown, hasRunCode, executableLanguages]);
   useEffect(() => {
     if (!containerRef.current) return;
-    let resolvedTheme = "github-light";
-    if (codeTheme === "dark") {
-      resolvedTheme = "github-dark";
-    } else if (codeTheme === "auto") {
-      resolvedTheme = document.documentElement.classList.contains("dark") ? "github-dark" : "github-light";
-    }
     const highlightCodeBlocks = async () => {
       const codeBlocks = containerRef.current?.querySelectorAll("pre[data-lang]");
       if (!codeBlocks) return;
@@ -980,7 +987,7 @@ var MarkdownRenderer = ({
       });
     });
     highlightCodeBlocks();
-  }, [html, codeTheme]);
+  }, [html, resolvedTheme]);
   const handleRun = useCallback(
     async (button, block) => {
       const codeEl = block.querySelector("code[data-executable]");

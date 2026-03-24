@@ -1023,6 +1023,21 @@ const MarkdownRenderer = ({
   onRunCodeRef.current = onRunCode;
   const [html, setHtml] = React.useState<string>("");
 
+  // Resolve and track the actual shiki theme
+  const [resolvedTheme, setResolvedTheme] = React.useState<"github-light" | "github-dark">("github-light");
+  React.useEffect(() => {
+    if (codeTheme !== "auto") {
+      setResolvedTheme(codeTheme === "dark" ? "github-dark" : "github-light");
+      return;
+    }
+    const htmlEl = document.documentElement;
+    const update = () => setResolvedTheme(htmlEl.classList.contains("dark") ? "github-dark" : "github-light");
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(htmlEl, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [codeTheme]);
+
   const hasRunCode = !!onRunCode;
 
   // Render markdown to HTML
@@ -1037,16 +1052,6 @@ const MarkdownRenderer = ({
   // Shiki highlighting + copy button handlers (from project)
   useEffect(() => {
     if (!containerRef.current) return;
-
-    // Resolve theme
-    let resolvedTheme: "github-light" | "github-dark" = "github-light";
-    if (codeTheme === "dark") {
-      resolvedTheme = "github-dark";
-    } else if (codeTheme === "auto") {
-      resolvedTheme = document.documentElement.classList.contains("dark")
-        ? "github-dark"
-        : "github-light";
-    }
 
     const highlightCodeBlocks = async () => {
       const codeBlocks = containerRef.current?.querySelectorAll("pre[data-lang]");
@@ -1119,7 +1124,7 @@ const MarkdownRenderer = ({
     });
 
     highlightCodeBlocks();
-  }, [html, codeTheme]);
+  }, [html, resolvedTheme]);
 
   // Run button handler (from library)
   const handleRun = useCallback(
