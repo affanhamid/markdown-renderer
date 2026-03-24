@@ -894,7 +894,7 @@ function renderMarkdownToHtml(markdown, options) {
     parts.push(`<p>${content}</p>`);
     i++;
   }
-  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}</style><div class="prose max-w-none">${parts.join("")}</div>`;
+  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}</style><div class="prose max-w-none">${parts.join("")}</div>`;
 }
 var mermaidInstance = null;
 var MarkdownRenderer = ({
