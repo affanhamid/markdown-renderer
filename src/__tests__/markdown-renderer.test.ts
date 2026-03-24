@@ -519,6 +519,14 @@ $$`;
       expect(output).toContain("<code>inline code</code>");
     });
 
+    test("should suppress typography plugin backtick pseudo-elements", () => {
+      const input = "Use `code` here.";
+      const output = renderMarkdownToHtml(input);
+      expect(output).toContain("code::before");
+      expect(output).toContain("code::after");
+      expect(output).toContain("content:none");
+    });
+
     test("should render multiple inline code", () => {
       const input = "Use `var` or `let` for variables.";
       const output = renderMarkdownToHtml(input);
