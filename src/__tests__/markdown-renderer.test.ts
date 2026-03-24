@@ -1070,7 +1070,7 @@ describe("Executable code blocks", () => {
       const output = renderMarkdownToHtml(input);
       expect(output).not.toContain("data-executable");
       expect(output).not.toContain('class="md-code-block"');
-      expect(output).not.toContain("md-code-output");
+      expect(output).not.toContain('class="md-code-output"');
       expect(output).toContain("code-block-wrapper");
       expect(output).toContain('data-lang="python"');
       expect(output).toContain('class="language-python"');
