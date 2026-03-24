@@ -889,9 +889,9 @@ function renderMarkdownToHtml(
           if (isExecutable) {
             parts.push(
               `<div class="md-code-block" data-language="${escapedLang}" data-code-index="${currentIndex}" data-executable="true">` +
-                `<div class="md-code-block-header" style="display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none">` +
-                `<span style="font-size:0.75rem;color:#666;font-family:monospace">${escapedLang}</span>` +
-                `<button class="md-run-btn" data-code-index="${currentIndex}" style="padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit">Run</button>` +
+                `<div class="md-code-block-header">` +
+                `<span class="md-code-lang">${escapedLang}</span>` +
+                `<button class="md-run-btn" data-code-index="${currentIndex}">Run</button>` +
                 `</div>` +
                 `<pre data-lang="${escapedLang}" data-code="${escapeHtml(codeContent)}" style="overflow-x:auto;border-radius:0 0 0.375rem 0.375rem;background:#f7f7f7;color:#1f2937;padding:0.75rem;font-size:0.875rem;margin:0;border:1px solid #e0e0e0;border-top:none"><code class="language-${escapedLang}" data-executable="true">${escapedCode}</code></pre>` +
                 `<div class="md-code-output" data-output-for="${currentIndex}" style="display:none"></div>` +
@@ -1005,7 +1005,7 @@ function renderMarkdownToHtml(
     i++;
   }
 
-  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}</style><div class="prose max-w-none">${parts.join("")}</div>`;
+  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}.md-code-block-header{display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none}.md-code-lang{font-size:0.75rem;color:#666;font-family:monospace}.md-run-btn{padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit}.dark .md-code-block-header{background:#2d2d2d;border-color:#444}.dark .md-code-lang{color:#aaa}.dark .md-run-btn{background:#374151;color:#e5e5e5;border-color:#555}.dark .md-run-btn:hover{background:#4b5563}</style><div class="prose max-w-none">${parts.join("")}</div>`;
 }
 
 // Module-level mermaid instance — initialized once across all renders
