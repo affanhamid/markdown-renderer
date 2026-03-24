@@ -892,7 +892,7 @@ function renderMarkdownToHtml(
                 `<span style="font-size:0.75rem;color:#666;font-family:monospace">${escapedLang}</span>` +
                 `<button class="md-run-btn" data-code-index="${currentIndex}" style="padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit">Run</button>` +
                 `</div>` +
-                `<pre style="overflow-x:auto;border-radius:0 0 0.375rem 0.375rem;background:#f7f7f7;color:#1f2937;padding:0.75rem;font-size:0.875rem;margin:0;border:1px solid #e0e0e0;border-top:none"><code class="language-${escapedLang}" data-executable="true">${escapedCode}</code></pre>` +
+                `<pre data-lang="${escapedLang}" data-code="${escapeHtml(codeContent)}" style="overflow-x:auto;border-radius:0 0 0.375rem 0.375rem;background:#f7f7f7;color:#1f2937;padding:0.75rem;font-size:0.875rem;margin:0;border:1px solid #e0e0e0;border-top:none"><code class="language-${escapedLang}" data-executable="true">${escapedCode}</code></pre>` +
                 `<div class="md-code-output" data-output-for="${currentIndex}" style="display:none"></div>` +
                 `</div>`,
             );
