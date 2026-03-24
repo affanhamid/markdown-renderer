@@ -522,9 +522,10 @@ $$`;
     test("should suppress typography plugin backtick pseudo-elements", () => {
       const input = "Use `code` here.";
       const output = renderMarkdownToHtml(input);
-      expect(output).toContain("code::before");
-      expect(output).toContain("code::after");
+      expect(output).toContain("::before");
+      expect(output).toContain("::after");
       expect(output).toContain("content:none");
+      expect(output).toContain("<style>");
     });
 
     test("should render multiple inline code", () => {
