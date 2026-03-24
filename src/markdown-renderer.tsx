@@ -1005,7 +1005,7 @@ function renderMarkdownToHtml(
     i++;
   }
 
-  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}.md-code-block-header{display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none}.md-code-lang{font-size:0.75rem;color:#666;font-family:monospace}.md-run-btn{padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit}.dark .md-code-block-header{background:#2d2d2d;border-color:#444}.dark .md-code-lang{color:#aaa}.dark .md-run-btn{background:#374151;color:#e5e5e5;border-color:#555}.dark .md-run-btn:hover{background:#4b5563}</style><div class="prose max-w-none">${parts.join("")}</div>`;
+  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}.md-code-block-header{display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none}.md-code-lang{font-size:0.75rem;color:#666;font-family:monospace}.md-run-btn{padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit}.dark .md-code-block-header{background:#2d2d2d;border-color:#444}.dark .md-code-lang{color:#aaa}.dark .md-run-btn{background:#374151;color:#e5e5e5;border-color:#555}.dark .md-run-btn:hover{background:#4b5563}.dark .md-code-output{background:#1f2937 !important;color:#e5e5e5 !important}.dark .md-code-output.md-code-error{background:#451a1a !important;color:#fca5a5 !important}</style><div class="prose max-w-none">${parts.join("")}</div>`;
 }
 
 // Module-level mermaid instance — initialized once across all renders
@@ -1089,6 +1089,12 @@ const MarkdownRenderer = ({
         tempDiv.innerHTML = highlighted;
         const newPre = tempDiv.firstElementChild;
         if (newPre) {
+          // Preserve data attributes for executable code blocks
+          if (preElement.querySelector("code[data-executable]")) {
+            const codeEl = newPre.querySelector("code");
+            if (codeEl) codeEl.setAttribute("data-executable", "true");
+            newPre.setAttribute("data-code", code);
+          }
           preElement.replaceWith(newPre);
         }
       }
