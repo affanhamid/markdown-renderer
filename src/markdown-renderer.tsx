@@ -1005,7 +1005,7 @@ function renderMarkdownToHtml(
     i++;
   }
 
-  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}.md-code-block-header{display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none}.md-code-lang{font-size:0.75rem;color:#666;font-family:monospace}.md-run-btn{padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit}.dark .md-code-block-header{background:#2d2d2d;border-color:#444}.dark .md-code-lang{color:#aaa}.dark .md-run-btn{background:#374151;color:#e5e5e5;border-color:#555}.dark .md-run-btn:hover{background:#4b5563}.dark .md-code-output{background:#1f2937 !important;color:#e5e5e5 !important}.dark .md-code-output.md-code-error{background:#451a1a !important;color:#fca5a5 !important}</style><div class="prose max-w-none">${parts.join("")}</div>`;
+  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}.md-code-block-header{display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none}.md-code-lang{font-size:0.75rem;color:#666;font-family:monospace}.md-run-btn{padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit}.dark .md-code-block-header{background:#2d2d2d;border-color:#444}.dark .md-code-lang{color:#aaa}.dark .md-run-btn{background:#374151;color:#e5e5e5;border-color:#555}.dark .md-run-btn:hover{background:#4b5563}.md-code-output{font-family:monospace;font-size:0.85rem;white-space:pre-wrap;word-break:break-word;padding:0.75rem;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 0.375rem 0.375rem;background:#f9fafb;color:#1f2937;position:relative;margin-top:0}.md-code-output::before{content:"Output";display:block;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;margin-bottom:0.4rem;padding-bottom:0.3rem;border-bottom:1px solid #e5e7eb}.md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#fecaca}.dark .md-code-output{background:#1a1a2e;color:#e5e5e5;border-color:#374151}.dark .md-code-output::before{color:#6b7280;border-bottom-color:#374151}.dark .md-code-output.md-code-error{background:#2d1b1b;color:#fca5a5;border-color:#5c2020}.dark .md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#5c2020}</style><div class="prose max-w-none">${parts.join("")}</div>`;
 }
 
 // Module-level mermaid instance — initialized once across all renders
@@ -1146,8 +1146,6 @@ const MarkdownRenderer = ({
       button.textContent = "Running...";
       outputEl.style.display = "block";
       outputEl.textContent = "Running...";
-      outputEl.style.background = "#f7f7f7";
-      outputEl.style.color = "#333";
       outputEl.className = "md-code-output";
 
       try {
@@ -1159,12 +1157,8 @@ const MarkdownRenderer = ({
 
         if (result.error) {
           outputEl.className = "md-code-output md-code-error";
-          outputEl.style.background = "#fef2f2";
-          outputEl.style.color = "#dc2626";
           outputEl.textContent = result.error;
         } else if (result.output) {
-          outputEl.style.background = "#f7f7f7";
-          outputEl.style.color = "#333";
           outputEl.textContent = result.output;
         }
 
@@ -1184,8 +1178,6 @@ const MarkdownRenderer = ({
         }
       } catch (err) {
         outputEl.className = "md-code-output md-code-error";
-        outputEl.style.background = "#fef2f2";
-        outputEl.style.color = "#dc2626";
         outputEl.textContent = err instanceof Error ? err.message : "Execution failed";
       } finally {
         button.disabled = false;
