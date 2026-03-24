@@ -1161,7 +1161,7 @@ describe("Executable code blocks", () => {
       const input = "```python\nprint('hello')\n```";
       const output = renderMarkdownToHtml(input, { executableLanguages: ["python"] });
       // The <pre> in executable blocks should have an explicit dark text color
-      const preMatch = output.match(/<pre\s+style="([^"]*)"/);
+      const preMatch = output.match(/<pre\s[^>]*style="([^"]*)"/);
       expect(preMatch).toBeTruthy();
       expect(preMatch![1]).toContain("color:");
       expect(preMatch![1]).toContain("#1f2937");
