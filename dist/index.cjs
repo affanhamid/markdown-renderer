@@ -940,7 +940,8 @@ var MarkdownRenderer = ({
   markdown,
   className,
   onRunCode,
-  executableLanguages = ["python", "r"]
+  executableLanguages = ["python", "r"],
+  codeTheme = "auto"
 }) => {
   const containerRef = (0, import_react.useRef)(null);
   const onRunCodeRef = (0, import_react.useRef)(onRunCode);
@@ -956,6 +957,12 @@ var MarkdownRenderer = ({
   }, [markdown, hasRunCode, executableLanguages]);
   (0, import_react.useEffect)(() => {
     if (!containerRef.current) return;
+    let resolvedTheme = "github-light";
+    if (codeTheme === "dark") {
+      resolvedTheme = "github-dark";
+    } else if (codeTheme === "auto") {
+      resolvedTheme = document.documentElement.classList.contains("dark") ? "github-dark" : "github-light";
+    }
     const highlightCodeBlocks = async () => {
       const codeBlocks = containerRef.current?.querySelectorAll("pre[data-lang]");
       if (!codeBlocks) return;
@@ -964,13 +971,13 @@ var MarkdownRenderer = ({
         const lang = preElement.getAttribute("data-lang") || "plaintext";
         const code = preElement.getAttribute("data-code") || "";
         const effectiveLang = lang === "text" || lang === "" ? "plaintext" : lang;
-        const cacheKey = getCacheKey(code, effectiveLang);
+        const cacheKey = getCacheKey(code, `${effectiveLang}:${resolvedTheme}`);
         let highlighted = highlightCache.get(cacheKey);
         if (!highlighted) {
           try {
             highlighted = await (0, import_shiki.codeToHtml)(code, {
               lang: effectiveLang,
-              theme: "github-light"
+              theme: resolvedTheme
             });
             highlightCache.set(cacheKey, highlighted);
           } catch (error) {
@@ -1012,7 +1019,7 @@ var MarkdownRenderer = ({
       });
     });
     highlightCodeBlocks();
-  }, [html]);
+  }, [html, codeTheme]);
   const handleRun = (0, import_react.useCallback)(
     async (button, block) => {
       const codeEl = block.querySelector("code[data-executable]");

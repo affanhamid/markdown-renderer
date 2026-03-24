@@ -21,6 +21,7 @@ export interface MarkdownRendererProps {
   className?: string;
   onRunCode?: (code: string, language: string) => Promise<CodeExecutionResult>;
   executableLanguages?: string[];
+  codeTheme?: "light" | "dark" | "auto";
 }
 
 function escapeHtml(text: string): string {
@@ -1015,6 +1016,7 @@ const MarkdownRenderer = ({
   className,
   onRunCode,
   executableLanguages = ["python", "r"],
+  codeTheme = "auto",
 }: MarkdownRendererProps) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const onRunCodeRef = useRef(onRunCode);
@@ -1036,6 +1038,16 @@ const MarkdownRenderer = ({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Resolve theme
+    let resolvedTheme: "github-light" | "github-dark" = "github-light";
+    if (codeTheme === "dark") {
+      resolvedTheme = "github-dark";
+    } else if (codeTheme === "auto") {
+      resolvedTheme = document.documentElement.classList.contains("dark")
+        ? "github-dark"
+        : "github-light";
+    }
+
     const highlightCodeBlocks = async () => {
       const codeBlocks = containerRef.current?.querySelectorAll("pre[data-lang]");
       if (!codeBlocks) return;
@@ -1048,15 +1060,15 @@ const MarkdownRenderer = ({
         // Use "plaintext" for unknown languages instead of "text"
         const effectiveLang = lang === "text" || lang === "" ? "plaintext" : lang;
 
-        // Check cache first
-        const cacheKey = getCacheKey(code, effectiveLang);
+        // Check cache first (include theme in cache key)
+        const cacheKey = getCacheKey(code, `${effectiveLang}:${resolvedTheme}`);
         let highlighted = highlightCache.get(cacheKey);
 
         if (!highlighted) {
           try {
             highlighted = await codeToHtml(code, {
               lang: effectiveLang,
-              theme: "github-light",
+              theme: resolvedTheme,
             });
             highlightCache.set(cacheKey, highlighted);
           } catch (error) {
@@ -1107,7 +1119,7 @@ const MarkdownRenderer = ({
     });
 
     highlightCodeBlocks();
-  }, [html]);
+  }, [html, codeTheme]);
 
   // Run button handler (from library)
   const handleRun = useCallback(
