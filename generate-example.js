@@ -1,4 +1,5 @@
 import { renderMarkdownToHtml } from './dist/index.js';
+import { codeToHtml } from 'shiki';
 import fs from 'fs';
 
 // Comprehensive markdown that exercises EVERY feature
@@ -313,9 +314,55 @@ And an image: ![example](https://picsum.photos/seed/final/600/200)
 `;
 
 // Render the markdown to HTML
-const renderedContent = renderMarkdownToHtml(markdown, {
+const rawHtml = renderMarkdownToHtml(markdown, {
   executableLanguages: ['python', 'r']
 });
+
+// Highlight code blocks with shiki
+async function highlightHtml(html) {
+  const preRegex = /<pre\s+data-lang="([^"]*)"(?:\s+data-code="([^"]*)")?([^>]*)>([\s\S]*?)<\/pre>/g;
+  let result = html;
+  const replacements = [];
+
+  let match;
+  while ((match = preRegex.exec(html)) !== null) {
+    const lang = match[1] || 'plaintext';
+    const codeEncoded = match[2] || '';
+    const innerHtml = match[4] || '';
+    const fullMatch = match[0];
+
+    const code = codeEncoded
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'");
+
+    const effectiveLang = lang === 'text' || lang === '' ? 'plaintext' : lang;
+
+    try {
+      let highlighted = await codeToHtml(code, { lang: effectiveLang, theme: 'github-light' });
+
+      // Preserve data-executable for executable blocks
+      if (innerHtml.includes('data-executable')) {
+        highlighted = highlighted.replace(/^<pre /, `<pre data-code="${codeEncoded}" `);
+        highlighted = highlighted.replace(/<code /, `<code data-executable="true" `);
+      }
+
+      replacements.push({ original: fullMatch, replacement: highlighted });
+    } catch {
+      // Skip if highlighting fails
+    }
+  }
+
+  for (const { original, replacement } of replacements) {
+    result = result.replace(original, replacement);
+  }
+
+  return result;
+}
+
+const renderedContent = await highlightHtml(rawHtml);
 
 // Create the full HTML page
 const fullHtml = `<!DOCTYPE html>

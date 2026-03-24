@@ -933,7 +933,7 @@ function renderMarkdownToHtml(markdown, options) {
     parts.push(`<p>${content}</p>`);
     i++;
   }
-  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}.md-code-block-header{display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none}.md-code-lang{font-size:0.75rem;color:#666;font-family:monospace}.md-run-btn{padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit}.dark .md-code-block-header{background:#2d2d2d;border-color:#444}.dark .md-code-lang{color:#aaa}.dark .md-run-btn{background:#374151;color:#e5e5e5;border-color:#555}.dark .md-run-btn:hover{background:#4b5563}.md-code-output{font-family:monospace;font-size:0.85rem;white-space:pre-wrap;word-break:break-word;padding:0.75rem;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 0.375rem 0.375rem;background:#f9fafb;color:#1f2937;position:relative;margin-top:0}.md-code-output::before{content:"Output";display:block;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;margin-bottom:0.4rem;padding-bottom:0.3rem;border-bottom:1px solid #e5e7eb}.md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#fecaca}.dark .md-code-output{background:#1a1a2e;color:#e5e5e5;border-color:#374151}.dark .md-code-output::before{color:#6b7280;border-bottom-color:#374151}.dark .md-code-output.md-code-error{background:#2d1b1b;color:#fca5a5;border-color:#5c2020}.dark .md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#5c2020}</style><div class="prose max-w-none">${parts.join("")}</div>`;
+  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}.md-code-block-header{display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none}.md-code-lang{font-size:0.75rem;color:#666;font-family:monospace}.md-run-btn{padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit}.dark .md-code-block-header{background:#2d2d2d;border-color:#444}.dark .md-code-lang{color:#aaa}.dark .md-run-btn{background:#374151;color:#e5e5e5;border-color:#555}.dark .md-run-btn:hover{background:#4b5563}.md-code-block{margin-bottom:1rem}.md-code-output{font-family:monospace;font-size:0.85rem;white-space:pre-wrap;word-break:break-word;padding:0.75rem;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 0.375rem 0.375rem;background:#f9fafb;color:#1f2937;position:relative;margin-top:0}.md-code-output::before{content:"Output";display:block;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;margin-bottom:0.4rem;padding-bottom:0.3rem;border-bottom:1px solid #e5e7eb}.md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#fecaca}.dark .md-code-output{background:#1a1a2e;color:#e5e5e5;border-color:#374151}.dark .md-code-output::before{color:#6b7280;border-bottom-color:#374151}.dark .md-code-output.md-code-error{background:#2d1b1b;color:#fca5a5;border-color:#5c2020}.dark .md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#5c2020}</style><div class="prose max-w-none">${parts.join("")}</div>`;
 }
 var mermaidInstance = null;
 var MarkdownRenderer = ({
@@ -962,21 +962,23 @@ var MarkdownRenderer = ({
   }, [codeTheme]);
   const hasRunCode = !!onRunCode;
   import_react.default.useEffect(() => {
+    let cancelled = false;
     const rendered = renderMarkdownToHtml(
       markdown,
       hasRunCode ? { executableLanguages } : void 0
     );
-    setHtml(rendered);
-  }, [markdown, hasRunCode, executableLanguages]);
-  (0, import_react.useEffect)(() => {
-    if (!containerRef.current) return;
-    const highlightCodeBlocks = async () => {
-      const codeBlocks = containerRef.current?.querySelectorAll("pre[data-lang]");
-      if (!codeBlocks) return;
-      for (const block of Array.from(codeBlocks)) {
-        const preElement = block;
-        const lang = preElement.getAttribute("data-lang") || "plaintext";
-        const code = preElement.getAttribute("data-code") || "";
+    const highlightHtml = async (rawHtml) => {
+      const preRegex = /<pre\s+data-lang="([^"]*)"(?:\s+data-code="([^"]*)")?([^>]*)>([\s\S]*?)<\/pre>/g;
+      let result = rawHtml;
+      const replacements = [];
+      let match;
+      while ((match = preRegex.exec(rawHtml)) !== null) {
+        const lang = match[1] || "plaintext";
+        const codeEncoded = match[2] || "";
+        const restAttrs = match[3] || "";
+        const innerHtml = match[4] || "";
+        const fullMatch = match[0];
+        const code = codeEncoded.replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
         const effectiveLang = lang === "text" || lang === "" ? "plaintext" : lang;
         const cacheKey = getCacheKey(code, `${effectiveLang}:${resolvedTheme}`);
         let highlighted = highlightCache.get(cacheKey);
@@ -987,25 +989,37 @@ var MarkdownRenderer = ({
               theme: resolvedTheme
             });
             highlightCache.set(cacheKey, highlighted);
-          } catch (error) {
-            console.warn(`Failed to highlight code block with language '${effectiveLang}':`, error);
-            preElement.classList.add("code-plain");
+          } catch {
             continue;
           }
         }
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = highlighted;
-        const newPre = tempDiv.firstElementChild;
-        if (newPre) {
-          if (preElement.querySelector("code[data-executable]")) {
-            const codeEl = newPre.querySelector("code");
-            if (codeEl) codeEl.setAttribute("data-executable", "true");
-            newPre.setAttribute("data-code", code);
-          }
-          preElement.replaceWith(newPre);
+        const isExecutable = innerHtml.includes("data-executable");
+        if (isExecutable) {
+          highlighted = highlighted.replace(
+            /^<pre /,
+            `<pre data-code="${codeEncoded}" `
+          );
+          highlighted = highlighted.replace(
+            /<code /,
+            `<code data-executable="true" `
+          );
         }
+        replacements.push({ original: fullMatch, replacement: highlighted });
       }
+      for (const { original, replacement } of replacements) {
+        result = result.replace(original, replacement);
+      }
+      return result;
     };
+    highlightHtml(rendered).then((highlightedHtml) => {
+      if (!cancelled) setHtml(highlightedHtml);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [markdown, hasRunCode, executableLanguages, resolvedTheme]);
+  (0, import_react.useEffect)(() => {
+    if (!containerRef.current) return;
     const copyButtons = containerRef.current.querySelectorAll(".copy-btn");
     copyButtons.forEach((btn) => {
       btn.addEventListener("click", async (e) => {
@@ -1030,8 +1044,7 @@ var MarkdownRenderer = ({
         }
       });
     });
-    highlightCodeBlocks();
-  }, [html, resolvedTheme]);
+  }, [html]);
   const handleRun = (0, import_react.useCallback)(
     async (button, block) => {
       const codeEl = block.querySelector("code[data-executable]");

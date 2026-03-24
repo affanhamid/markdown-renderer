@@ -1005,7 +1005,7 @@ function renderMarkdownToHtml(
     i++;
   }
 
-  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}.md-code-block-header{display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none}.md-code-lang{font-size:0.75rem;color:#666;font-family:monospace}.md-run-btn{padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit}.dark .md-code-block-header{background:#2d2d2d;border-color:#444}.dark .md-code-lang{color:#aaa}.dark .md-run-btn{background:#374151;color:#e5e5e5;border-color:#555}.dark .md-run-btn:hover{background:#4b5563}.md-code-output{font-family:monospace;font-size:0.85rem;white-space:pre-wrap;word-break:break-word;padding:0.75rem;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 0.375rem 0.375rem;background:#f9fafb;color:#1f2937;position:relative;margin-top:0}.md-code-output::before{content:"Output";display:block;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;margin-bottom:0.4rem;padding-bottom:0.3rem;border-bottom:1px solid #e5e7eb}.md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#fecaca}.dark .md-code-output{background:#1a1a2e;color:#e5e5e5;border-color:#374151}.dark .md-code-output::before{color:#6b7280;border-bottom-color:#374151}.dark .md-code-output.md-code-error{background:#2d1b1b;color:#fca5a5;border-color:#5c2020}.dark .md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#5c2020}</style><div class="prose max-w-none">${parts.join("")}</div>`;
+  return `<style>.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::before,.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *))::after{content:none}.prose :where(code):not(:where([class~="not-prose"],[class~="not-prose"] *)){background-color:transparent}.md-code-block-header{display:flex;align-items:center;justify-content:space-between;padding:0.25rem 0.75rem;background:#f0f0f0;border-radius:0.375rem 0.375rem 0 0;border:1px solid #e0e0e0;border-bottom:none}.md-code-lang{font-size:0.75rem;color:#666;font-family:monospace}.md-run-btn{padding:0.2rem 0.6rem;font-size:0.75rem;border-radius:0.25rem;border:1px solid #ccc;background:#fff;cursor:pointer;font-family:inherit}.dark .md-code-block-header{background:#2d2d2d;border-color:#444}.dark .md-code-lang{color:#aaa}.dark .md-run-btn{background:#374151;color:#e5e5e5;border-color:#555}.dark .md-run-btn:hover{background:#4b5563}.md-code-block{margin-bottom:1rem}.md-code-output{font-family:monospace;font-size:0.85rem;white-space:pre-wrap;word-break:break-word;padding:0.75rem;border:1px solid #e0e0e0;border-top:none;border-radius:0 0 0.375rem 0.375rem;background:#f9fafb;color:#1f2937;position:relative;margin-top:0}.md-code-output::before{content:"Output";display:block;font-size:0.65rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;color:#9ca3af;margin-bottom:0.4rem;padding-bottom:0.3rem;border-bottom:1px solid #e5e7eb}.md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#fecaca}.dark .md-code-output{background:#1a1a2e;color:#e5e5e5;border-color:#374151}.dark .md-code-output::before{color:#6b7280;border-bottom-color:#374151}.dark .md-code-output.md-code-error{background:#2d1b1b;color:#fca5a5;border-color:#5c2020}.dark .md-code-output.md-code-error::before{color:#f87171;border-bottom-color:#5c2020}</style><div class="prose max-w-none">${parts.join("")}</div>`;
 }
 
 // Module-level mermaid instance — initialized once across all renders
@@ -1040,32 +1040,38 @@ const MarkdownRenderer = ({
 
   const hasRunCode = !!onRunCode;
 
-  // Render markdown to HTML
+  // Render markdown to HTML with shiki highlighting baked in
   React.useEffect(() => {
+    let cancelled = false;
     const rendered = renderMarkdownToHtml(
       markdown,
       hasRunCode ? { executableLanguages } : undefined,
     );
-    setHtml(rendered);
-  }, [markdown, hasRunCode, executableLanguages]);
 
-  // Shiki highlighting + copy button handlers (from project)
-  useEffect(() => {
-    if (!containerRef.current) return;
+    // Highlight code blocks in the HTML string before setting state
+    const highlightHtml = async (rawHtml: string): Promise<string> => {
+      // Match all <pre data-lang="..." data-code="..."> blocks
+      const preRegex = /<pre\s+data-lang="([^"]*)"(?:\s+data-code="([^"]*)")?([^>]*)>([\s\S]*?)<\/pre>/g;
+      let result = rawHtml;
+      const replacements: Array<{ original: string; replacement: string }> = [];
 
-    const highlightCodeBlocks = async () => {
-      const codeBlocks = containerRef.current?.querySelectorAll("pre[data-lang]");
-      if (!codeBlocks) return;
+      let match;
+      while ((match = preRegex.exec(rawHtml)) !== null) {
+        const lang = match[1] || "plaintext";
+        const codeEncoded = match[2] || "";
+        const restAttrs = match[3] || "";
+        const innerHtml = match[4] || "";
+        const fullMatch = match[0];
 
-      for (const block of Array.from(codeBlocks)) {
-        const preElement = block as HTMLPreElement;
-        const lang = preElement.getAttribute("data-lang") || "plaintext";
-        const code = preElement.getAttribute("data-code") || "";
+        // Decode HTML entities to get actual code
+        const code = codeEncoded
+          .replace(/&amp;/g, "&")
+          .replace(/&lt;/g, "<")
+          .replace(/&gt;/g, ">")
+          .replace(/&quot;/g, '"')
+          .replace(/&#39;/g, "'");
 
-        // Use "plaintext" for unknown languages instead of "text"
         const effectiveLang = lang === "text" || lang === "" ? "plaintext" : lang;
-
-        // Check cache first (include theme in cache key)
         const cacheKey = getCacheKey(code, `${effectiveLang}:${resolvedTheme}`);
         let highlighted = highlightCache.get(cacheKey);
 
@@ -1076,29 +1082,45 @@ const MarkdownRenderer = ({
               theme: resolvedTheme,
             });
             highlightCache.set(cacheKey, highlighted);
-          } catch (error) {
-            // If highlighting fails, add a class for CSS styling
-            console.warn(`Failed to highlight code block with language '${effectiveLang}':`, error);
-            preElement.classList.add("code-plain");
-            continue;
+          } catch {
+            continue; // Skip if highlighting fails
           }
         }
 
-        // Replace the pre element with highlighted version
-        const tempDiv = document.createElement("div");
-        tempDiv.innerHTML = highlighted;
-        const newPre = tempDiv.firstElementChild;
-        if (newPre) {
-          // Preserve data attributes for executable code blocks
-          if (preElement.querySelector("code[data-executable]")) {
-            const codeEl = newPre.querySelector("code");
-            if (codeEl) codeEl.setAttribute("data-executable", "true");
-            newPre.setAttribute("data-code", code);
-          }
-          preElement.replaceWith(newPre);
+        // Check if this is an executable block (has data-executable in the inner code tag)
+        const isExecutable = innerHtml.includes("data-executable");
+        if (isExecutable) {
+          // Add data-executable and data-code to the shiki pre
+          highlighted = highlighted.replace(
+            /^<pre /,
+            `<pre data-code="${codeEncoded}" `,
+          );
+          highlighted = highlighted.replace(
+            /<code /,
+            `<code data-executable="true" `,
+          );
         }
+
+        replacements.push({ original: fullMatch, replacement: highlighted });
       }
+
+      for (const { original, replacement } of replacements) {
+        result = result.replace(original, replacement);
+      }
+
+      return result;
     };
+
+    highlightHtml(rendered).then((highlightedHtml) => {
+      if (!cancelled) setHtml(highlightedHtml);
+    });
+
+    return () => { cancelled = true; };
+  }, [markdown, hasRunCode, executableLanguages, resolvedTheme]);
+
+  // Copy button + run button click handlers (attached after html renders)
+  useEffect(() => {
+    if (!containerRef.current) return;
 
     // Add copy button click handlers
     const copyButtons = containerRef.current.querySelectorAll(".copy-btn");
@@ -1129,8 +1151,7 @@ const MarkdownRenderer = ({
       });
     });
 
-    highlightCodeBlocks();
-  }, [html, resolvedTheme]);
+  }, [html]);
 
   // Run button handler (from library)
   const handleRun = useCallback(
