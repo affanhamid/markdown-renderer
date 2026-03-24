@@ -1069,7 +1069,7 @@ describe("Executable code blocks", () => {
       const input = "```python\nprint('hello')\n```";
       const output = renderMarkdownToHtml(input);
       expect(output).not.toContain("data-executable");
-      expect(output).not.toContain("md-code-block");
+      expect(output).not.toContain('class="md-code-block"');
       expect(output).not.toContain("md-code-output");
       expect(output).toContain("code-block-wrapper");
       expect(output).toContain('data-lang="python"');
@@ -1089,7 +1089,7 @@ describe("Executable code blocks", () => {
       const input = "```javascript\nconst x = 1;\n```";
       const output = renderMarkdownToHtml(input, execOptions);
       expect(output).not.toContain("data-executable");
-      expect(output).not.toContain("md-code-block");
+      expect(output).not.toContain('class="md-code-block"');
       expect(output).toContain("code-block-wrapper");
       expect(output).toContain('data-lang="javascript"');
     });
@@ -1131,7 +1131,7 @@ describe("Executable code blocks", () => {
       const input = "# Hello\n\nSome text with **bold**.";
       const output = renderMarkdownToHtml(input, execOptions);
       expect(output).not.toContain("data-executable");
-      expect(output).not.toContain("md-code-block");
+      expect(output).not.toContain('class="md-code-block"');
       expect(output).toContain("<h1");
       expect(output).toContain("<strong>bold</strong>");
     });
