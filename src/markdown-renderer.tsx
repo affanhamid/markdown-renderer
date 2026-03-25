@@ -1096,7 +1096,7 @@ const MarkdownRenderer = ({
             `<pre data-code="${codeEncoded}" `,
           );
           highlighted = highlighted.replace(
-            /<code /,
+            /<code(?=[ >])/,
             `<code data-executable="true" `,
           );
         }
